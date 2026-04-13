@@ -1,3 +1,5 @@
+[![Publish to npm](https://github.com/meidellkraft/powpow-cli/actions/workflows/publish.yml/badge.svg)](https://github.com/meidellkraft/powpow-cli/actions/workflows/publish.yml)
+
 # PowPow CLI
 
 PowPow is a Power Pages pro-code development tool that streamlines the development process by offering code transpilation and a local development server. It aims to reduce development iteration time and enable the use of TypeScript for authoring website code assets.
