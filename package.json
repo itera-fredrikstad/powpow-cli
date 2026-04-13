@@ -1,5 +1,5 @@
 {
-	"name": "powpow",
+	"name": "powpow-cli",
 	"version": "0.1.0",
 	"description": "Pro-code development tool for Power Pages with TypeScript transpilation and local development server features.",
 	"type": "module",
