@@ -152,7 +152,7 @@ Use `globals` to reference libraries that are already loaded on the page as UMD 
   "globals": {
     "react": "React",
     "react-dom": "ReactDOM",
-    "jquery": "jQuery"
+    "bootstrap": "bootstrap"
   }
 }
 ```

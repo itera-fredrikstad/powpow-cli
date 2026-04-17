@@ -8,6 +8,7 @@ import { buildOwnershipMaps, findOwner } from './ownership.js';
 import { log } from './log.js';
 
 const UMD_VIRTUAL_PREFIX = 'virtual:umd-global:';
+const RUNTIME_URL_PREFIX = 'powpow-runtime:';
 
 interface PowPowPluginOptions {
 	portalDir: string;
@@ -83,9 +84,9 @@ export function powpow({
 			if (importer && isBareSpecifier(specifier)) {
 				const pkgResource = packageEntries.get(specifier);
 				if (pkgResource) {
-					if (pkgResource.type === 'web-file' && currentResource.type !== 'web-template') {
+					if (pkgResource.type === 'web-file') {
 						// Externalize: resolve to the web-file's runtime URL
-						return { id: pkgResource.runtimeUrl!, external: true };
+						return { id: RUNTIME_URL_PREFIX + pkgResource.runtimeUrl!, external: true };
 					}
 					if (pkgResource.type === 'web-template') {
 						log.warn(
@@ -93,7 +94,7 @@ export function powpow({
 							`Inlining into "${entry.source}" (web-templates cannot be imported as modules).`,
 						);
 					}
-					// web-template owner or current entry is web-template: inline
+					// web-template owner: inline (web-templates cannot be imported as modules)
 					return null;
 				}
 
@@ -114,8 +115,9 @@ export function powpow({
 				const importerDir = dirname(importer);
 				const resolved = resolve(importerDir, specifier);
 
-				// Try each extension to find a matching owner
-				for (const ext of ['', '.ts', '.tsx', '.js', '.jsx']) {
+				// Try each extension and index-file variant to find a matching owner
+				const suffixes = ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js', '/index.jsx'];
+				for (const ext of suffixes) {
 					const candidate = resolved + ext;
 
 					// Same-subdir check: if current entry has a subdir and the target is under it, inline
@@ -127,7 +129,7 @@ export function powpow({
 					const owner = findOwner(candidate, dirOwners, rootFileOwners);
 
 					if (owner) {
-						if (owner.resource.type === 'web-file' && currentResource.type !== 'web-template') {
+						if (owner.resource.type === 'web-file') {
 							// Externalize to the owner's web-file URL
 							if (candidate !== owner.absSource) {
 								log.warn(
@@ -136,15 +138,7 @@ export function powpow({
 									`Consider importing from "${owner.source}" directly.`,
 								);
 							}
-							return { id: owner.resource.runtimeUrl!, external: true };
-						}
-						if (owner.resource.type === 'web-file' && currentResource.type === 'web-template') {
-							log.warn(
-								`Web-template "${entry.source}" imports "${specifier}" ` +
-								`owned by web-file entry "${owner.source}". Inlining because web-templates ` +
-								`cannot reference external modules.`,
-							);
-							return null;
+							return { id: RUNTIME_URL_PREFIX + owner.resource.runtimeUrl!, external: true };
 						}
 						if (owner.resource.type === 'web-template') {
 							log.warn(
@@ -188,6 +182,11 @@ export function powpow({
 			}
 
 			return null;
+		},
+
+		renderChunk(code) {
+			if (!code.includes(RUNTIME_URL_PREFIX)) return null;
+			return code.replaceAll(RUNTIME_URL_PREFIX, '');
 		},
 
 		generateBundle(_, bundle) {
