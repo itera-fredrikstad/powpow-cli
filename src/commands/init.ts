@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { input, confirm } from '@inquirer/prompts';
+import { confirm, input } from '@inquirer/prompts';
 import { saveConfig } from '../config.js';
-import type { PowpowConfig } from '../types.js';
 import { log } from '../log.js';
+import type { PowpowConfig } from '../types.js';
 
 interface InitOptions {
 	configPath?: string;

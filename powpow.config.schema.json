@@ -38,6 +38,22 @@
 						"type": "string",
 						"description": "Power Pages resource GUID (web-template or web-file).",
 						"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+					},
+					"options": {
+						"type": "object",
+						"description": "Per-entry overrides.",
+						"properties": {
+							"globals": {
+								"type": "object",
+								"description": "UMD globals merged over the top-level `globals` map (entry keys win).",
+								"additionalProperties": { "type": "string" }
+							},
+							"minify": {
+								"type": "boolean",
+								"description": "Override minification for this entry. Default: minified in `build`, unminified in dev (watch) mode."
+							}
+						},
+						"additionalProperties": false
 					}
 				},
 				"required": ["source", "target"],
@@ -51,6 +67,10 @@
 				"type": "string"
 			},
 			"examples": [{ "react": "React", "react-dom": "ReactDOM", "bootstrap": "bootstrap" }]
+		},
+		"extensionId": {
+			"type": "string",
+			"description": "Chrome extension ID of the PowPow Interceptor. If set, the dev server rejects requests whose Origin does not match chrome-extension://<id>. Leave unset to allow all origins."
 		}
 	},
 	"required": ["portalConfigPath", "entryPoints"],

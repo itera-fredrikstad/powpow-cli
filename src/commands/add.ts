@@ -1,21 +1,17 @@
-import { existsSync, mkdirSync, writeFileSync, globSync } from 'node:fs';
-import { resolve, relative, dirname } from 'node:path';
-import { select, input } from '@inquirer/prompts';
-import { scanPortalResources } from '../resources.js';
-import { findConfig, loadConfig, saveConfig, resolveProjectRoot, resolveSourceDir, resolvePortalDir } from '../config.js';
-import type { PortalResource } from '../types.js';
+import { existsSync, globSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { confirm, input, select } from '@inquirer/prompts';
+import { loadAndValidate, saveConfig } from '../config.js';
 import { log } from '../log.js';
+import { scanPortalResources } from '../resources.js';
+import type { PortalResource } from '../types.js';
 
 interface AddOptions {
 	configPath?: string;
 }
 
 export async function add({ configPath }: AddOptions): Promise<void> {
-	const resolvedConfigPath = findConfig(configPath);
-	const config = loadConfig(resolvedConfigPath);
-	const projectRoot = resolveProjectRoot(resolvedConfigPath);
-	const absPortalDir = resolvePortalDir(config, projectRoot);
-	const absSourceDir = resolveSourceDir(config, projectRoot);
+	const { configPath: resolvedConfigPath, config, portalDir: absPortalDir, sourceDir: absSourceDir } = loadAndValidate(configPath);
 
 	// Scan available portal resources
 	const resources = scanPortalResources(absPortalDir);
@@ -91,7 +87,16 @@ export async function add({ configPath }: AddOptions): Promise<void> {
 		const absPath = resolve(absSourceDir, filename);
 
 		if (existsSync(absPath)) {
-			console.log(`File already exists: ${absPath}`);
+			const overwrite = await confirm({
+				message: `${absPath} already exists. Overwrite?`,
+				default: false,
+			});
+			if (overwrite) {
+				writeFileSync(absPath, `// Entry point for "${selected.name}"\nexport {};\n`);
+				log.successRaw(`Overwrote ${absPath}`);
+			} else {
+				log.successRaw(`Keeping existing file at ${absPath}`);
+			}
 		} else {
 			mkdirSync(dirname(absPath), { recursive: true });
 			writeFileSync(absPath, `// Entry point for "${selected.name}"\nexport {};\n`);

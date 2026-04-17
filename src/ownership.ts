@@ -1,6 +1,6 @@
-import { resolve, dirname, relative } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import type { PortalResource } from './types.js';
-import { isBareSpecifier } from './utils.js';
+import { isBareSpecifier, toPosix } from './utils.js';
 
 export interface EntryOwner {
 	source: string;
@@ -30,7 +30,7 @@ export function buildOwnershipMaps(
 		if (isBareSpecifier(source)) {
 			packageEntries.set(source, resource);
 		} else {
-			const absSource = resolve(absSourceDir, source);
+			const absSource = toPosix(resolve(absSourceDir, source));
 			const relSource = relative(absSourceDir, absSource);
 			const dir = dirname(relSource);
 			const owner: EntryOwner = { source, absSource, resource };
@@ -38,7 +38,7 @@ export function buildOwnershipMaps(
 			if (dir === '.') {
 				rootFileOwners.set(absSource, owner);
 			} else {
-				const absDir = resolve(absSourceDir, dir);
+				const absDir = toPosix(resolve(absSourceDir, dir));
 				dirOwners.set(absDir, owner);
 			}
 		}
@@ -57,15 +57,16 @@ export function findOwner(
 	dirOwners: Map<string, EntryOwner>,
 	rootFileOwners: Map<string, EntryOwner>,
 ): EntryOwner | null {
-	const rootOwner = rootFileOwners.get(targetAbsPath);
+	const normalized = toPosix(targetAbsPath);
+	const rootOwner = rootFileOwners.get(normalized);
 	if (rootOwner) return rootOwner;
 
-	const targetDir = dirname(targetAbsPath);
+	const targetDir = dirname(normalized);
 	let bestMatch: EntryOwner | null = null;
 	let bestLen = 0;
 
 	for (const [absDir, owner] of dirOwners) {
-		if (targetDir === absDir || targetDir.startsWith(absDir + '/')) {
+		if (targetDir === absDir || targetDir.startsWith(`${absDir}/`)) {
 			if (absDir.length > bestLen) {
 				bestLen = absDir.length;
 				bestMatch = owner;

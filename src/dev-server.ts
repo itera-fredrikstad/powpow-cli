@@ -1,9 +1,9 @@
-import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve, extname } from 'node:path';
-import { scanPortalResources } from './resources.js';
-import type { PowpowConfig, PortalResource } from './types.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import { extname, resolve } from 'node:path';
 import { log } from './log.js';
+import { scanPortalResources } from './resources.js';
+import type { PortalResource, PowpowConfig } from './types.js';
 
 const MIME_TYPES: Record<string, string> = {
 	'.js': 'application/javascript',
@@ -22,12 +22,15 @@ function mimeFor(filePath: string): string {
 interface DevServerOptions {
 	portalDir: string;
 	port?: number;
+	host?: string;
 	config: PowpowConfig;
+	/** Pre-scanned portal resources. If omitted, the server will scan on startup. */
+	resources?: Map<string, PortalResource>;
 }
 
-export function startDevServer({ portalDir, port = 3001, config }: DevServerOptions): void {
+export function startDevServer({ portalDir, port = 3001, host = '127.0.0.1', config, resources: preScanned }: DevServerOptions): Server {
 	const absPortalDir = resolve(portalDir);
-	const resources = scanPortalResources(absPortalDir);
+	const resources = preScanned ?? scanPortalResources(absPortalDir);
 
 	const entryPointsByTarget = new Map(config.entryPoints.map((ep) => [ep.target, ep]));
 
@@ -44,11 +47,22 @@ export function startDevServer({ portalDir, port = 3001, config }: DevServerOpti
 		}
 	}
 
+	const allowedOrigin = config.extensionId ? `chrome-extension://${config.extensionId}` : null;
+
 	const server = createServer((req, res) => {
-		const url = new URL(req.url ?? '/', `http://localhost:${port}`);
+		const url = new URL(req.url ?? '/', `http://${host}:${port}`);
 		const pathname = url.pathname;
 
-		res.setHeader('Access-Control-Allow-Origin', '*');
+		const origin = req.headers.origin;
+		const corsOrigin = allowedOrigin ?? '*';
+		if (allowedOrigin && origin && origin !== allowedOrigin) {
+			res.writeHead(403, { 'Content-Type': 'application/json' });
+			res.end(JSON.stringify({ error: 'origin not allowed', origin }));
+			return;
+		}
+
+		res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+		res.setHeader('Vary', 'Origin');
 		res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
 		res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -58,8 +72,11 @@ export function startDevServer({ portalDir, port = 3001, config }: DevServerOpti
 			return;
 		}
 
+		// Path-traversal note: `webFilesByUrl` is an exact-match map built from pre-scanned
+		// portal resources, so `../` in the request path simply misses the lookup. No filesystem
+		// traversal is possible — we never concatenate the request path into a disk path.
 		if (pathname.startsWith('/web-files/')) {
-			const partialUrl = '/' + pathname.slice('/web-files/'.length);
+			const partialUrl = `/${pathname.slice('/web-files/'.length)}`;
 			const resource = webFilesByUrl.get(partialUrl);
 			if (resource && existsSync(resource.contentPath)) {
 				res.writeHead(200, { 'Content-Type': mimeFor(resource.contentPath) });
@@ -109,12 +126,15 @@ export function startDevServer({ portalDir, port = 3001, config }: DevServerOpti
 		res.end(JSON.stringify({ error: 'not found', pathname }));
 	});
 
-	server.listen(port, () => {
-		log.success(`Serving portal resources on http://localhost:${port}`, 'dev-server');
+	server.listen(port, host, () => {
+		log.success(`Serving portal resources on http://${host}:${port}`, 'dev-server');
 		console.log(`  Web files:     /web-files/{partialUrl}`);
 		console.log(`  Web templates: /web-templates/{guid}`);
 		console.log(`  Manifest:      /manifest`);
 		console.log(`  Portal dir:    ${absPortalDir}`);
 		console.log(`  Resources:     ${webFilesByUrl.size} web files, ${webTemplatesById.size} web templates`);
+		console.log(`  CORS:          ${allowedOrigin ?? '* (allow-all — set "extensionId" in config to restrict)'}`);
 	});
+
+	return server;
 }

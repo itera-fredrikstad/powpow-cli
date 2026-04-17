@@ -1,5 +1,5 @@
-import { readFileSync, globSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { globSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import yaml from 'js-yaml';
 import type { PortalResource } from './types.js';
 
