@@ -1,18 +1,18 @@
 {
 	"name": "powpow-cli",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "Pro-code development tool for Power Pages with TypeScript transpilation and local development server features.",
 	"type": "module",
 	"license": "ISC",
-	"author": "Meidellkraft",
+	"author": "Philip Meidell <philip.meidell@itera.com>",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/meidellkraft/powpow-cli.git"
+		"url": "git+https://github.com/itera-fredrikstad/powpow-cli.git"
 	},
 	"bugs": {
-		"url": "https://github.com/meidellkraft/powpow-cli/issues"
+		"url": "https://github.com/itera-fredrikstad/powpow-cli/issues"
 	},
-	"homepage": "https://github.com/meidellkraft/powpow-cli#readme",
+	"homepage": "https://github.com/itera-fredrikstad/powpow-cli#readme",
 	"keywords": [
 		"power-pages",
 		"power-platform",

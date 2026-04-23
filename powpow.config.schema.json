@@ -1,7 +1,7 @@
 {
 	"$schema": "http://json-schema.org/draft-07/schema#",
-	"title": "powpow config",
-	"description": "Configuration for the powpow build tool.",
+	"title": "PowPow CLI config",
+	"description": "Configuration file for PowPow CLI build tool.",
 	"type": "object",
 	"properties": {
 		"$schema": {

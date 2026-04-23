@@ -1,5 +1,5 @@
-[![CI](https://github.com/meidellkraft/powpow-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/meidellkraft/powpow-cli/actions/workflows/ci.yml)
-[![Publish to npm](https://github.com/meidellkraft/powpow-cli/actions/workflows/publish.yml/badge.svg)](https://github.com/meidellkraft/powpow-cli/actions/workflows/publish.yml)
+[![CI](https://github.com/itera-fredrikstad/powpow-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/itera-fredrikstad/powpow-cli/actions/workflows/ci.yml)
+[![Publish to npm](https://github.com/itera-fredrikstad/powpow-cli/actions/workflows/publish.yml/badge.svg)](https://github.com/itera-fredrikstad/powpow-cli/actions/workflows/publish.yml)
 
 # PowPow CLI
 
@@ -16,7 +16,7 @@ PowPow is a Power Pages pro-code development tool that streamlines the developme
 - **Interactive CLI** — Guided setup and resource mapping with `init` and `add` commands
 - **UMD globals** — Reference libraries like React or Bootstrap from `globalThis` instead of bundling them
 - **Smart module resolution** — Automatic inlining, externalizing, or shimming of imports based on entry point ownership
-- **Companion browser extension** — Use with [PowPow Interceptor](https://github.com/meidellkraft/powpow-interceptor) to live-swap portal assets during development
+- **Companion browser extension** — Use with [PowPow Interceptor](https://github.com/itera-fredrikstad/powpow-interceptor) to live-swap portal assets during development
 
 ## Prerequisites
 
@@ -214,7 +214,7 @@ The dev server exposes three routes:
 | `GET /web-templates/:guid` | Serves a web template's built HTML content |
 | `GET /web-files/*` | Serves a web file by its partial URL path |
 
-The server is designed to work with the [PowPow Interceptor](https://github.com/meidellkraft/powpow-interceptor) browser extension, which intercepts Power Pages asset requests and redirects them to the local dev server.
+The server is designed to work with the [PowPow Interceptor](https://github.com/itera-fredrikstad/powpow-interceptor) browser extension, which intercepts Power Pages asset requests and redirects them to the local dev server.
 
 ### Dev Server trust model
 
