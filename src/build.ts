@@ -29,7 +29,8 @@ function createEntryBuildConfig(
 ): { inputOptions: InputOptions; outputOptions: OutputOptions } {
 	const sourceDir = config.sourceDir ?? 'src';
 	const mergedGlobals = { ...config.globals, ...entry.options?.globals };
-	const minify = entry.options?.minify ?? !options.dev;
+	const minify = entry.options?.minify ?? config.minify ?? !options.dev;
+	const sourceMap = entry.options?.sourceMap ?? config.sourceMap ?? !!options.dev;
 
 	const { input, plugin } = powpow({
 		entry,
@@ -53,7 +54,7 @@ function createEntryBuildConfig(
 		format: 'es',
 		dir: resolve(projectRoot, 'dist'),
 		minify,
-		sourcemap: options.dev ? 'inline' : false,
+		sourcemap: sourceMap ? 'inline' : false,
 	};
 
 	return { inputOptions, outputOptions };

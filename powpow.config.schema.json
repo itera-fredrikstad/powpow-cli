@@ -50,7 +50,11 @@
 							},
 							"minify": {
 								"type": "boolean",
-								"description": "Override minification for this entry. Default: minified in `build`, unminified in dev (watch) mode."
+								"description": "Override minification for this entry. Falls back to top-level `minify`, then `true` in build / `false` in dev."
+							},
+							"sourceMap": {
+								"type": "boolean",
+								"description": "Override source map generation for this entry. Falls back to top-level `sourceMap`, then `false` in build / `true` in dev."
 							}
 						},
 						"additionalProperties": false
@@ -67,6 +71,14 @@
 				"type": "string"
 			},
 			"examples": [{ "react": "React", "react-dom": "ReactDOM", "bootstrap": "bootstrap" }]
+		},
+		"minify": {
+			"type": "boolean",
+			"description": "Global minification default. Per-entry `options.minify` takes precedence. Default: `true` in build, `false` in dev."
+		},
+		"sourceMap": {
+			"type": "boolean",
+			"description": "Global source map default. Per-entry `options.sourceMap` takes precedence. Default: `false` in build, `true` in dev."
 		},
 		"extensionId": {
 			"type": "string",

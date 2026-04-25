@@ -62,6 +62,9 @@ export function loadConfig(configPath: string): PowpowConfig {
 			if (entry.options.minify !== undefined && typeof entry.options.minify !== 'boolean') {
 				throw new Error(`Invalid config: "entryPoints[${i}].options.minify" must be a boolean (in ${configPath})`);
 			}
+			if (entry.options.sourceMap !== undefined && typeof entry.options.sourceMap !== 'boolean') {
+				throw new Error(`Invalid config: "entryPoints[${i}].options.sourceMap" must be a boolean (in ${configPath})`);
+			}
 		}
 	}
 	if (config.globals !== undefined) {
@@ -76,6 +79,12 @@ export function loadConfig(configPath: string): PowpowConfig {
 	}
 	if (config.extensionId !== undefined && typeof config.extensionId !== 'string') {
 		throw new Error(`Invalid config: "extensionId" must be a string (in ${configPath})`);
+	}
+	if (config.minify !== undefined && typeof config.minify !== 'boolean') {
+		throw new Error(`Invalid config: "minify" must be a boolean (in ${configPath})`);
+	}
+	if (config.sourceMap !== undefined && typeof config.sourceMap !== 'boolean') {
+		throw new Error(`Invalid config: "sourceMap" must be a boolean (in ${configPath})`);
 	}
 
 	return config;

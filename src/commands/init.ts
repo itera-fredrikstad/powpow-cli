@@ -47,7 +47,7 @@ export async function init({ configPath, force }: InitOptions): Promise<void> {
 	}
 
 	const config: PowpowConfig = {
-		$schema: './node_modules/powpow/powpow.config.schema.json',
+		$schema: './node_modules/powpow-cli/powpow.config.schema.json',
 		version: '1.0',
 		portalConfigPath: portalConfigPath.trim(),
 		sourceDir: sourceDir.trim() || 'src',

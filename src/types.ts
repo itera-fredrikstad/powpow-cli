@@ -1,8 +1,10 @@
 export interface EntryPointOverrides {
 	/** Per-entry UMD globals. Merged over the top-level `globals` (entry keys win). */
 	globals?: Record<string, string>;
-	/** Per-entry minify override. Default: minify in `build`, unminified in dev (watch) mode. */
+	/** Per-entry minify override. Falls back to top-level `minify`, then `true` in build / `false` in dev. */
 	minify?: boolean;
+	/** Per-entry source map override. Falls back to top-level `sourceMap`, then `false` in build / `true` in dev. */
+	sourceMap?: boolean;
 }
 
 export interface EntryPoint {
@@ -18,6 +20,10 @@ export interface PowpowConfig {
 	sourceDir?: string;
 	entryPoints: EntryPoint[];
 	globals?: Record<string, string>;
+	/** Global minify default. Per-entry `options.minify` takes precedence. Default: `true` in build, `false` in dev. */
+	minify?: boolean;
+	/** Global source map default. Per-entry `options.sourceMap` takes precedence. Default: `false` in build, `true` in dev. */
+	sourceMap?: boolean;
 	/**
 	 * Chrome extension ID of the PowPow Interceptor installation. If set, the dev server
 	 * rejects requests whose `Origin` header does not match `chrome-extension://<id>`.
