@@ -63,4 +63,30 @@ describe('scanPortalResources', () => {
 		writeFile('web-files/missing.webfile.yml', 'adx_webfileid: abc\nadx_name: missing\n');
 		expect(scanPortalResources(tmp).size).toBe(0);
 	});
+
+	it('discovers server-logic resources by their yml metadata', () => {
+		writeFile('server-logic/doStuff.js', '// server logic');
+		writeFile(
+			'server-logic/doStuff.serverlogic.yml',
+			'adx_serverlogicid: 00000000-0000-0000-0000-00000000cccc\nadx_name: doStuff\n',
+		);
+
+		const resources = scanPortalResources(tmp);
+		const resource = resources.get('00000000-0000-0000-0000-00000000cccc');
+		expect(resource).toBeDefined();
+		expect(resource?.type).toBe('server-logic');
+		expect(resource?.name).toBe('doStuff');
+		expect(resource?.contentPath).toBe(resolve(tmp, 'server-logic/doStuff.js'));
+		expect(resource?.runtimeUrl).toBeUndefined();
+	});
+
+	it('honours configurable root directory names', () => {
+		writeFile('custom-templates/x/x.webtemplate.source.html', '');
+		writeFile(
+			'custom-templates/x/x.webtemplate.yml',
+			'adx_webtemplateid: 00000000-0000-0000-0000-00000000dddd\nadx_name: x\n',
+		);
+		const resources = scanPortalResources(tmp, { webTemplates: 'custom-templates' });
+		expect(resources.get('00000000-0000-0000-0000-00000000dddd')?.type).toBe('web-template');
+	});
 });

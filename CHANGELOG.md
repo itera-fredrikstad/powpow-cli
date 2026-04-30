@@ -1,5 +1,107 @@
 # Changelog
 
+## 0.3.0
+
+A major refactor adding **server-logic** as a first-class entry-point type,
+simplifying the source layout, and bundling the Power Pages global typings
+inside the package. Breaking changes — see the migration notes below.
+
+### Server logic support
+
+- New entry-point type `server-logic`, alongside `web-template` and `web-file`.
+  Server-logic entries are bundled with `platform: 'node'`, no UMD globals,
+  and **all imports inlined** (cross-entry imports throw at build time). Output
+  is plain ESM written directly to the portal's `server-logic/<name>.js` (no
+  `<script>` wrapper, no cache-bust rewriting).
+- `scanPortalResources` discovers server-logic resources via
+  `<root>/*.serverlogic.yml` (configurable; default root `server-logic`),
+  reading `adx_serverlogicid` and `adx_name`.
+
+### Strict, type-scoped source layout (replaces ownership model)
+
+- The "deepest-directory-wins" ownership model is gone. Entry-point sources
+  must now be **direct children** of one of three configurable roots under
+  `sourceDir`:
+  - `web-templates/` — for `web-template` targets
+  - `web-files/` — for `web-file` targets
+  - `server-logic/` — for `server-logic` targets
+- The root determines the entry's type; a mismatch with the target GUID's
+  resource type is a hard validation error.
+- Anything outside these roots is library code only — never an entry point.
+- `roots` is configurable in `powpow.config.json` if you need different folder
+  names.
+- `src/ownership.ts` deleted; replaced by `src/entries.ts` exposing
+  `resolveEntries` and `findEntryForFile` (exact-source match only).
+
+### Built-in globals — no config required
+
+- React, ReactDOM, jQuery, Bootstrap, `shell`, and `Microsoft` (Dynamic365
+  Portal) are now **always-on** UMD globals for browser entries. Drop them
+  from your `powpow.config.json` `globals` map; they're applied automatically.
+- `globals` in user config now adds to / overrides the defaults.
+- Server-logic entries have **no** browser globals available, only the `Server`
+  global from the Power Pages server-side runtime.
+
+### Bundled typings
+
+- `Portal.d.ts`, `Shell.d.ts`, and `ServerAPI.d.ts` now ship inside
+  `powpow-cli` under `types/`. Plus aggregator entry points:
+  - `powpow-cli/types/browser` — Portal, Shell, and ambient module stubs for
+    `react`, `react-dom`, `jquery`, `bootstrap`, `shell`, `Microsoft`.
+  - `powpow-cli/types/server` — ServerAPI only, no DOM.
+- `tsconfig.base.json` now wires up `"types": ["powpow-cli/types/browser"]`
+  by default. `powpow init` writes a separate scoped tsconfig in
+  `src/server-logic/` that overrides to the server typings and drops DOM lib.
+- Consumers no longer need to install `@types/react` etc. for editor support
+  (they may still install them for fuller types — declarations merge).
+
+### `powpow init` is now a full bootstrap
+
+- Detects (or prompts for) `npm` vs `pnpm`.
+- Creates `package.json` if missing (`<pm> init -y`).
+- Installs `powpow-cli` and `typescript` as devDependencies if missing.
+- Adds `powpow:dev` and `powpow:build` scripts to `package.json`.
+- Scaffolds `src/{web-templates,web-files,server-logic}/` with `.gitkeep`s.
+- Writes a root `tsconfig.json` and a server-logic-scoped tsconfig.
+- Writes `.powpow/globals/*` shim files via `writeShims`.
+- Writes a starter `powpow.config.json`.
+- Idempotent — re-running on an existing project skips already-present files.
+
+### `powpow add` is type-aware
+
+- After picking a portal resource, the source filename prompt defaults the
+  directory to the matching root and rejects anything else.
+- Bare-specifier mode (e.g. `source: "lodash"`) is offered only for `web-file`
+  resources.
+- Per-type scaffold content (web-template: React render stub, web-file:
+  `export {};`, server-logic: `Server.Logger.Log(...)` stub).
+
+### Build-time dependency graph
+
+- After every build, a console summary lists each entry's bundled-module and
+  externals counts, warns about modules duplicated across browser entries
+  (server-logic is excluded from duplication detection — it has no choice but
+  to inline), and lists which UMD globals each entry references.
+- No JSON file is written; this is console-only for now.
+
+### Migration notes
+
+- Move existing entry-point sources into `src/web-templates/<name>` or
+  `src/web-files/<name>` according to their target type. Files at other paths
+  will fail validation.
+- The "one entry per directory" restriction is gone — multiple entries inside
+  `src/web-files/` are now fine.
+- You can drop React/ReactDOM/jQuery/Bootstrap/shell/Microsoft from your
+  `globals` config; they're built in.
+- Re-run `powpow init` to get the new tsconfig structure and `.powpow/globals`
+  shim files for `shell` and `Microsoft`.
+
+### Internal
+
+- `src/plugin/*` now consumes a flat `ResolvedEntry[]` instead of the
+  `OwnershipMaps` tree. Resolution decisions are tracked in
+  `EntryResolutionLog` so the graph emitter can summarize them after build.
+
 ## 0.2.0
 
 A broad correctness, DX, and product pass. No breaking changes to existing

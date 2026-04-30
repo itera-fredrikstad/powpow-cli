@@ -1,59 +1,184 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { confirm, input } from '@inquirer/prompts';
-import { saveConfig } from '../config.js';
+import { input, select } from '@inquirer/prompts';
 import { log } from '../log.js';
-import type { PowpowConfig } from '../types.js';
+import { addDevCmd, detectPackageManager, initCmd, runPm } from '../pm.js';
+import { DEFAULT_BROWSER_GLOBALS, writeShims } from '../shims.js';
+import type { PackageManager } from '../pm.js';
 
 interface InitOptions {
 	configPath?: string;
+	/** Accepted for CLI compatibility; currently unused (init is idempotent). */
 	force?: boolean;
 }
 
-export async function init({ configPath, force }: InitOptions): Promise<void> {
-	const targetPath = configPath ? resolve(configPath) : resolve(process.cwd(), 'powpow.config.json');
+export async function init({ configPath }: InitOptions): Promise<void> {
+	const projectRoot = process.cwd();
 
-	if (existsSync(targetPath) && !force) {
-		log.errorRaw(`Config file already exists: ${targetPath}`);
-		console.error('Use --force to overwrite.');
-		process.exit(1);
+	// ── Step 1: Detect / prompt for package manager ───────────────────────────
+	const detected = detectPackageManager(projectRoot);
+	let pm: PackageManager;
+
+	if (detected !== null) {
+		pm = detected;
+		log.info(`Detected package manager: ${pm}`);
+	} else {
+		pm = await select<PackageManager>({
+			message: 'Which package manager do you use?',
+			choices: [
+				{ name: 'pnpm', value: 'pnpm' },
+				{ name: 'npm', value: 'npm' },
+			],
+			default: 'pnpm',
+		});
+	}
+
+	// ── Step 2: Prompt for portal config path ─────────────────────────────────
+	const targetConfigPath = configPath ?? resolve(projectRoot, 'powpow.config.json');
+	let existingPortalPath: string | undefined;
+	if (existsSync(targetConfigPath)) {
+		try {
+			const existing = JSON.parse(readFileSync(targetConfigPath, 'utf8'));
+			existingPortalPath = existing.portalConfigPath as string | undefined;
+		} catch {
+			// ignore parse errors; we'll overwrite below if it doesn't exist yet
+		}
 	}
 
 	const portalConfigPath = await input({
 		message: 'Relative path to Power Pages portal config root:',
+		default: existingPortalPath,
 		validate(value) {
 			if (!value.trim()) return 'Path is required';
-			const abs = resolve(process.cwd(), value.trim());
-			if (!existsSync(abs)) return `Directory not found: ${abs}`;
 			return true;
 		},
 	});
 
-	const sourceDir = await input({
-		message: 'Relative path to TypeScript source directory:',
-		default: 'src',
-	});
+	const sourceDir = 'src';
 
-	const absSourceDir = resolve(process.cwd(), sourceDir);
-	if (!existsSync(absSourceDir)) {
-		const create = await confirm({
-			message: `Source directory "${sourceDir}" does not exist. Create it?`,
-			default: true,
-		});
-		if (create) {
-			mkdirSync(absSourceDir, { recursive: true });
-			console.log(`Created ${absSourceDir}`);
+	// ── Step 3: Run `<pm> init -y` if package.json is missing ─────────────────
+	const pkgJsonPath = resolve(projectRoot, 'package.json');
+	if (!existsSync(pkgJsonPath)) {
+		log.info('No package.json found. Initialising…');
+		try {
+			await runPm(pm, initCmd(pm), projectRoot);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			log.error(`Failed to run "${pm} init": ${msg}`);
+			process.exit(1);
 		}
 	}
 
-	const config: PowpowConfig = {
-		$schema: './node_modules/powpow-cli/powpow.config.schema.json',
-		version: '1.0',
-		portalConfigPath: portalConfigPath.trim(),
-		sourceDir: sourceDir.trim() || 'src',
-		entryPoints: [],
+	// ── Step 4: Install missing dev deps ──────────────────────────────────────
+	const pkgJson = readPkgJson(pkgJsonPath);
+	const installedDeps = {
+		...pkgJson.dependencies,
+		...pkgJson.devDependencies,
 	};
+	const missing = ['powpow-cli', 'typescript'].filter((dep) => !(dep in installedDeps));
 
-	saveConfig(targetPath, config);
-	log.successRaw(`✓ Created ${targetPath}`);
+	if (missing.length > 0) {
+		log.info(`Installing dev dependencies: ${missing.join(', ')}`);
+		try {
+			await runPm(pm, [...addDevCmd(pm), ...missing], projectRoot);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			log.error(`Failed to install dev dependencies: ${msg}`);
+			process.exit(1);
+		}
+	} else {
+		log.info('powpow-cli and typescript are already installed.');
+	}
+
+	// ── Step 5: Add scripts to package.json if missing ────────────────────────
+	const scripts: Record<string, string> = {
+		'powpow:dev': 'powpow dev',
+		'powpow:build': 'powpow build',
+	};
+	const currentPkg = readPkgJson(pkgJsonPath);
+	currentPkg.scripts = currentPkg.scripts ?? {};
+	let scriptsAdded = 0;
+	for (const [name, cmd] of Object.entries(scripts)) {
+		if (!(name in currentPkg.scripts)) {
+			currentPkg.scripts[name] = cmd;
+			scriptsAdded++;
+		}
+	}
+	if (scriptsAdded > 0) {
+		writeFileSync(pkgJsonPath, JSON.stringify(currentPkg, null, '\t') + '\n');
+		log.success(`Added ${scriptsAdded} script(s) to package.json`);
+	}
+
+	// ── Step 6: Scaffold source directories ───────────────────────────────────
+	const dirs = [
+		`${sourceDir}/web-templates`,
+		`${sourceDir}/web-files`,
+		`${sourceDir}/server-logic`,
+	];
+	for (const dir of dirs) {
+		const absDir = resolve(projectRoot, dir);
+		if (!existsSync(absDir)) {
+			mkdirSync(absDir, { recursive: true });
+			writeFileSync(resolve(absDir, '.gitkeep'), '');
+			log.success(`Created ${dir}/`);
+		}
+	}
+
+	// ── Step 7: Write root tsconfig.json if missing ───────────────────────────
+	const rootTsconfig = resolve(projectRoot, 'tsconfig.json');
+	if (!existsSync(rootTsconfig)) {
+		const content = {
+			extends: 'powpow-cli/tsconfig.base.json',
+			include: [`${sourceDir}/**/*`],
+			exclude: [`${sourceDir}/server-logic/**/*`],
+		};
+		writeFileSync(rootTsconfig, JSON.stringify(content, null, '\t') + '\n');
+		log.success('Created tsconfig.json');
+	}
+
+	// ── Step 8: Write server-logic tsconfig if missing ────────────────────────
+	const serverTsconfig = resolve(projectRoot, sourceDir, 'server-logic', 'tsconfig.json');
+	if (!existsSync(serverTsconfig)) {
+		const content = {
+			extends: 'powpow-cli/tsconfig.base.json',
+			compilerOptions: {
+				lib: ['ES2022'],
+				types: ['powpow-cli/types/server'],
+			},
+			include: ['./**/*'],
+		};
+		// Ensure the directory exists (may have been skipped if dir already existed)
+		mkdirSync(resolve(projectRoot, sourceDir, 'server-logic'), { recursive: true });
+		writeFileSync(serverTsconfig, JSON.stringify(content, null, '\t') + '\n');
+		log.success('Created src/server-logic/tsconfig.json');
+	}
+
+	// ── Step 9: Write shim files ──────────────────────────────────────────────
+	writeShims(projectRoot, DEFAULT_BROWSER_GLOBALS);
+	log.success('Wrote .powpow/globals/ shim files');
+
+	// ── Step 10: Write powpow.config.json if missing ─────────────────────────
+	if (!existsSync(targetConfigPath)) {
+		const config = {
+			$schema: './node_modules/powpow-cli/powpow.config.schema.json',
+			portalConfigPath: portalConfigPath.trim(),
+			sourceDir,
+			entryPoints: [],
+		};
+		writeFileSync(targetConfigPath, JSON.stringify(config, null, '\t') + '\n');
+		log.success('Created powpow.config.json');
+	}
+
+	// ── Success ───────────────────────────────────────────────────────────────
+	console.log('');
+	log.successRaw('✓ powpow project initialised!');
+	log.info('Next step: run "powpow add" to wire up your first entry point.');
+}
+
+function readPkgJson(path: string): Record<string, unknown> & { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> } {
+	try {
+		return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+	} catch {
+		return {};
+	}
 }

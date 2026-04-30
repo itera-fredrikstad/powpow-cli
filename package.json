@@ -1,6 +1,6 @@
 {
 	"name": "powpow-cli",
-	"version": "0.2.2",
+	"version": "0.3.0",
 	"description": "Pro-code development tool for Power Pages with TypeScript transpilation and local development server features.",
 	"type": "module",
 	"license": "ISC",
@@ -27,6 +27,7 @@
 	},
 	"files": [
 		"dist",
+		"types",
 		"tsconfig.base.json",
 		"powpow.config.schema.json"
 	],

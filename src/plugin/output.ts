@@ -25,6 +25,8 @@ export function createGenerateBundleHook(ctx: PluginContext): Plugin['generateBu
 					output = `<script type="module" data-webtemplate-id="${resource.guid}">\n${output}\n</script>\n`;
 					break;
 				case 'web-file':
+				case 'server-logic':
+					// Plain ESM output, no wrapping.
 					break;
 			}
 

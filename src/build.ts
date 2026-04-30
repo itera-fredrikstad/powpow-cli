@@ -5,12 +5,14 @@ import { dirname, resolve } from 'node:path';
 import type { InputOptions, OutputOptions } from 'rolldown';
 import { rolldown } from 'rolldown';
 import { resolvePortalDir, validateEntryPoints } from './config.js';
+import { type ResolvedEntry, resolveEntries } from './entries.js';
 import { log } from './log.js';
-import { buildOwnershipMaps, type OwnershipMaps } from './ownership.js';
-import type { CollectedOutput } from './plugin/context.js';
+import type { CollectedOutput, EntryResolutionLog } from './plugin/context.js';
 import { RUNTIME_URL_PREFIX } from './plugin/context.js';
+import { buildGraph, printGraphSummary } from './graph.js';
 import { powpow } from './plugin/index.js';
 import { scanPortalResources } from './resources.js';
+import { DEFAULT_BROWSER_GLOBALS, writeShims } from './shims.js';
 import type { PortalResource, PowpowConfig } from './types.js';
 
 interface BuildOptions {
@@ -20,32 +22,40 @@ interface BuildOptions {
 function createEntryBuildConfig(
 	config: PowpowConfig,
 	projectRoot: string,
-	entry: PowpowConfig['entryPoints'][number],
+	currentEntry: ResolvedEntry,
+	allEntries: ResolvedEntry[],
 	inlinedPackages: Map<string, Set<string>>,
 	resourceMap: Map<string, PortalResource>,
-	ownershipMaps: OwnershipMaps,
 	outputCollector: Map<string, CollectedOutput>,
+	resolutionLog: EntryResolutionLog,
 	options: BuildOptions,
 ): { inputOptions: InputOptions; outputOptions: OutputOptions } {
 	const sourceDir = config.sourceDir ?? 'src';
-	const mergedGlobals = { ...config.globals, ...entry.options?.globals };
-	const minify = entry.options?.minify ?? config.minify ?? !options.dev;
-	const sourceMap = entry.options?.sourceMap ?? config.sourceMap ?? !!options.dev;
+	const entryOptions = config.entryPoints.find(
+		(e) => e.source === currentEntry.source && e.target === currentEntry.resource.guid,
+	)?.options;
+	const isServerLogic = currentEntry.type === 'server-logic';
+	const mergedGlobals = isServerLogic
+		? {}
+		: { ...DEFAULT_BROWSER_GLOBALS, ...config.globals, ...entryOptions?.globals };
+	const minify = entryOptions?.minify ?? config.minify ?? !options.dev;
+	const sourceMap = entryOptions?.sourceMap ?? config.sourceMap ?? !!options.dev;
 
 	const { input, plugin } = powpow({
-		entry,
+		currentEntry,
+		entries: allEntries,
 		root: projectRoot,
 		sourceDir,
 		globals: mergedGlobals,
 		inlinedPackages,
 		resourceMap,
-		ownershipMaps,
 		outputCollector,
+		resolutionLog,
 	});
 
 	const inputOptions: InputOptions = {
 		input,
-		platform: 'browser',
+		platform: isServerLogic ? 'node' : 'browser',
 		plugins: [plugin],
 	};
 
@@ -63,26 +73,26 @@ function createEntryBuildConfig(
 async function buildEntry(
 	config: PowpowConfig,
 	projectRoot: string,
-	entry: { source: string; target: string },
+	currentEntry: ResolvedEntry,
+	allEntries: ResolvedEntry[],
 	inlinedPackages: Map<string, Set<string>>,
 	resourceMap: Map<string, PortalResource>,
-	ownershipMaps: OwnershipMaps,
 	outputCollector: Map<string, CollectedOutput>,
+	resolutionLog: EntryResolutionLog,
 	options: BuildOptions,
 ): Promise<void> {
 	const { inputOptions, outputOptions } = createEntryBuildConfig(
 		config,
 		projectRoot,
-		entry,
+		currentEntry,
+		allEntries,
 		inlinedPackages,
 		resourceMap,
-		ownershipMaps,
 		outputCollector,
+		resolutionLog,
 		options,
 	);
 	const bundle = await rolldown(inputOptions);
-	// generateBundle pushes final content into outputCollector and removes chunks from the bundle;
-	// we still call write() so rolldown runs its full pipeline and flushes any other assets.
 	await bundle.write(outputOptions);
 	await bundle.close();
 }
@@ -99,10 +109,14 @@ function finalizeOutputs(outputCollector: Map<string, CollectedOutput>): void {
 	const prefixPattern = new RegExp(`${RUNTIME_URL_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^'")\\s]+)`, 'g');
 
 	for (const { resource, content } of outputCollector.values()) {
-		const rewritten = content.replace(prefixPattern, (_, url: string) => {
-			const hash = urlToHash.get(url);
-			return hash ? `${url}?v=${hash}` : url;
-		});
+		// Server-logic outputs never reference runtime URLs (cross-entry imports throw).
+		const rewritten =
+			resource.type === 'server-logic'
+				? content
+				: content.replace(prefixPattern, (_, url: string) => {
+						const hash = urlToHash.get(url);
+						return hash ? `${url}?v=${hash}` : url;
+					});
 
 		mkdirSync(dirname(resource.contentPath), { recursive: true });
 		writeFileSync(resource.contentPath, rewritten);
@@ -117,25 +131,49 @@ export async function build(
 	options: BuildOptions = {},
 ): Promise<void> {
 	const portalDir = resolvePortalDir(config, projectRoot);
-	const resourceMap = preScannedResources ?? scanPortalResources(portalDir);
+	const resourceMap = preScannedResources ?? scanPortalResources(portalDir, config.roots);
 	validateEntryPoints(config, projectRoot, resourceMap);
 
 	const sourceDir = resolve(projectRoot, config.sourceDir ?? 'src');
-	const ownershipMaps = buildOwnershipMaps(config.entryPoints, resourceMap, sourceDir);
+	const resolvedEntries = resolveEntries(config, resourceMap, sourceDir);
 	const inlinedPackages = new Map<string, Set<string>>();
 	const outputCollector = new Map<string, CollectedOutput>();
+	const resolutionLogs = new Map<string, EntryResolutionLog>();
+
+	// Create a fresh resolution log for each entry
+	for (const entry of resolvedEntries) {
+		resolutionLogs.set(entry.resource.guid, {
+			bundledModules: new Set(),
+			externalized: [],
+			globalsUsed: new Set(),
+		});
+	}
+
+	// Ensure shim files for known globals are up-to-date before bundling
+	writeShims(projectRoot, { ...DEFAULT_BROWSER_GLOBALS, ...config.globals });
 
 	const results = await Promise.allSettled(
-		config.entryPoints.map((entry) =>
-			buildEntry(config, projectRoot, entry, inlinedPackages, resourceMap, ownershipMaps, outputCollector, options),
-		),
+		resolvedEntries.map((entry) => {
+			const resolutionLog = resolutionLogs.get(entry.resource.guid)!;
+			return buildEntry(
+				config,
+				projectRoot,
+				entry,
+				resolvedEntries,
+				inlinedPackages,
+				resourceMap,
+				outputCollector,
+				resolutionLog,
+				options,
+			);
+		}),
 	);
 
 	const failures: { target: string; source: string; reason: unknown }[] = [];
 	results.forEach((result, i) => {
 		if (result.status === 'rejected') {
-			const entry = config.entryPoints[i];
-			failures.push({ target: entry.target, source: entry.source, reason: result.reason });
+			const entry = resolvedEntries[i];
+			failures.push({ target: entry.resource.guid, source: entry.source, reason: result.reason });
 		}
 	});
 
@@ -144,19 +182,11 @@ export async function build(
 			log.error(`Failed to build entry "${source}" → ${target}`);
 			console.error(reason);
 		}
-		throw new Error(`${failures.length} of ${config.entryPoints.length} entry points failed to build`);
+		throw new Error(`${failures.length} of ${resolvedEntries.length} entry points failed to build`);
 	}
 
 	finalizeOutputs(outputCollector);
-
-	for (const [pkg, entries] of inlinedPackages) {
-		if (entries.size > 1) {
-			log.warn(
-				`Package "${pkg}" is inlined by ${entries.size} entry points. ` +
-					`Consider creating a web-file entry point with source "${pkg}" to avoid code duplication.`,
-			);
-		}
-	}
+	printGraphSummary(buildGraph(resolvedEntries, resolutionLogs));
 }
 
 export async function watchBuild(
@@ -180,7 +210,7 @@ export async function watchBuild(
 		try {
 			do {
 				pending = false;
-				log.info('Building\u2026', 'watch');
+				log.info('Building…', 'watch');
 				const start = performance.now();
 				try {
 					await build(config, projectRoot, preScannedResources, { dev: true });

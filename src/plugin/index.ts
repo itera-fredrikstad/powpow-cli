@@ -1,6 +1,6 @@
-import { dirname, relative, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import type { Plugin } from 'rolldown';
-import { isBareSpecifier, toPosix } from '../utils.js';
+import { isBareSpecifier } from '../utils.js';
 import type { PluginContext, PowPowPluginOptions } from './context.js';
 import { createGenerateBundleHook, createRenderChunkHook } from './output.js';
 import { createResolveIdHook } from './resolve.js';
@@ -12,43 +12,36 @@ export function powpow(options: PowPowPluginOptions): {
 	input: Record<string, string>;
 	plugin: Plugin;
 } {
-	const { entry, root: rootOpt, sourceDir, globals, inlinedPackages, resourceMap, ownershipMaps, outputCollector } = options;
+	const { currentEntry, entries, root: rootOpt, sourceDir, globals, inlinedPackages, resourceMap, outputCollector } = options;
+	const resolutionLog = options.resolutionLog ?? {
+		bundledModules: new Set<string>(),
+		externalized: [],
+		globalsUsed: new Set<string>(),
+	};
 
 	const root = rootOpt ? resolve(rootOpt) : process.cwd();
 	const absSourceDir = resolve(root, sourceDir);
 	const globalsMap = globals ?? {};
-	const { dirOwners, rootFileOwners, packageEntries } = ownershipMaps;
 
-	// Entry-target existence is enforced by validateEntryPoints() before we get here.
-	const currentResource = resourceMap.get(entry.target)!;
-
-	let currentAbsSubdir: string | null = null;
-	if (!isBareSpecifier(entry.source)) {
-		const relSource = relative(absSourceDir, resolve(absSourceDir, entry.source));
-		const dir = dirname(relSource);
-		if (dir !== '.') {
-			currentAbsSubdir = toPosix(resolve(absSourceDir, dir));
-		}
-	}
+	const currentResource = currentEntry.resource;
 
 	const input: Record<string, string> = {};
-	if (isBareSpecifier(entry.source)) {
-		input[entry.target] = entry.source;
+	if (isBareSpecifier(currentEntry.source)) {
+		input[currentEntry.resource.guid] = currentEntry.source;
 	} else {
-		input[entry.target] = resolve(absSourceDir, entry.source);
+		input[currentEntry.resource.guid] = resolve(absSourceDir, currentEntry.source);
 	}
 
 	const ctx: PluginContext = {
-		entry,
+		currentEntry,
+		entries,
+		projectRoot: root,
 		resourceMap,
 		currentResource,
-		currentAbsSubdir,
-		dirOwners,
-		rootFileOwners,
-		packageEntries,
 		globalsMap,
 		inlinedPackages,
 		outputCollector,
+		resolutionLog,
 	};
 
 	const plugin: Plugin = {

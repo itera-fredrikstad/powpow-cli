@@ -30,9 +30,15 @@ export interface PowpowConfig {
 	 * When unset, all origins are allowed (current default for ease of setup).
 	 */
 	extensionId?: string;
+	/** Source-directory layout roots. Each entry-point source must be a direct child of one of these. */
+	roots?: {
+		webTemplates?: string;
+		webFiles?: string;
+		serverLogic?: string;
+	};
 }
 
-export type ResourceType = 'web-template' | 'web-file';
+export type ResourceType = 'web-template' | 'web-file' | 'server-logic';
 
 export interface PortalResource {
 	guid: string;

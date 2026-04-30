@@ -1,7 +1,21 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
-import type { PortalResource, PowpowConfig } from './types.js';
-import { isBareSpecifier } from './utils.js';
+import type { PortalResource, PowpowConfig, ResourceType } from './types.js';
+import { isBareSpecifier, toPosix } from './utils.js';
+
+export const DEFAULT_ROOTS = {
+	webTemplates: 'web-templates',
+	webFiles: 'web-files',
+	serverLogic: 'server-logic',
+} as const;
+
+export function resolveRoots(config: PowpowConfig): { webTemplates: string; webFiles: string; serverLogic: string } {
+	return {
+		webTemplates: config.roots?.webTemplates ?? DEFAULT_ROOTS.webTemplates,
+		webFiles: config.roots?.webFiles ?? DEFAULT_ROOTS.webFiles,
+		serverLogic: config.roots?.serverLogic ?? DEFAULT_ROOTS.serverLogic,
+	};
+}
 
 const CONFIG_FILENAME = 'powpow.config.json';
 
@@ -129,26 +143,52 @@ export function loadAndValidate(configPath?: string): LoadedConfig {
 
 export function validateEntryPoints(config: PowpowConfig, projectRoot: string, resourceMap: Map<string, PortalResource>): void {
 	const sourceDir = resolveSourceDir(config, projectRoot);
-	const dirToEntries = new Map<string, string[]>();
+	const roots = resolveRoots(config);
+	const rootToType: Array<{ root: string; type: ResourceType }> = [
+		{ root: roots.webTemplates, type: 'web-template' },
+		{ root: roots.webFiles, type: 'web-file' },
+		{ root: roots.serverLogic, type: 'server-logic' },
+	];
 	const missingTargets: { source: string; target: string }[] = [];
+	const layoutErrors: string[] = [];
 
 	for (const entry of config.entryPoints) {
-		if (!resourceMap.has(entry.target)) {
+		const resource = resourceMap.get(entry.target);
+		if (!resource) {
 			missingTargets.push(entry);
-		}
-
-		// Skip bare specifiers (npm packages) – they don't occupy a directory
-		if (isBareSpecifier(entry.source)) {
 			continue;
 		}
-		const absSource = resolve(sourceDir, entry.source);
-		const relSource = relative(sourceDir, absSource);
-		const dir = dirname(relSource);
-		const existing = dirToEntries.get(dir);
-		if (existing) {
-			existing.push(entry.source);
-		} else {
-			dirToEntries.set(dir, [entry.source]);
+
+		if (isBareSpecifier(entry.source)) {
+			if (resource.type !== 'web-file') {
+				layoutErrors.push(
+					`Entry "${entry.source}" → ${entry.target}: bare specifier sources are only allowed for web-file targets, but target type is ${resource.type}.`,
+				);
+			}
+			continue;
+		}
+
+		const absSource = toPosix(resolve(sourceDir, entry.source));
+		const relSource = toPosix(relative(sourceDir, absSource));
+		const segments = relSource.split('/');
+		if (segments.length !== 2 || segments[0] === '..' || relSource.startsWith('..')) {
+			layoutErrors.push(
+				`Entry "${entry.source}" → ${entry.target}: source must be a direct child of one of the configured roots (${rootToType.map((r) => `"${r.root}"`).join(', ')}).`,
+			);
+			continue;
+		}
+		const [topDir] = segments;
+		const matchedRoot = rootToType.find((r) => r.root === topDir);
+		if (!matchedRoot) {
+			layoutErrors.push(
+				`Entry "${entry.source}" → ${entry.target}: top-level directory "${topDir}" is not one of the configured roots (${rootToType.map((r) => `"${r.root}"`).join(', ')}).`,
+			);
+			continue;
+		}
+		if (matchedRoot.type !== resource.type) {
+			layoutErrors.push(
+				`Entry "${entry.source}" → ${entry.target}: file lives under "${matchedRoot.root}/" (${matchedRoot.type}) but target GUID resolves to a ${resource.type} resource.`,
+			);
 		}
 	}
 
@@ -160,13 +200,7 @@ export function validateEntryPoints(config: PowpowConfig, projectRoot: string, r
 		);
 	}
 
-	for (const [dir, sources] of dirToEntries) {
-		if (sources.length > 1) {
-			const dirLabel = dir === '.' ? 'sourceDir root' : `"${dir}"`;
-			throw new Error(
-				`Multiple entry points share the same directory ${dirLabel}: ${sources.join(', ')}. ` +
-					`Only one file-based entry point is allowed per directory.`,
-			);
-		}
+	if (layoutErrors.length > 0) {
+		throw new Error(`Invalid entry-point layout:\n${layoutErrors.map((m) => `  - ${m}`).join('\n')}`);
 	}
 }

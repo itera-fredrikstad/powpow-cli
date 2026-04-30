@@ -87,25 +87,23 @@ describe('loadConfig', () => {
 });
 
 describe('validateEntryPoints', () => {
-	function mkPortal(guids: string[]): Map<string, PortalResource> {
-		return new Map(
-			guids.map((g) => [
-				g,
-				{
-					guid: g,
-					type: 'web-file',
-					name: g,
-					contentPath: `/fake/${g}.js`,
-					runtimeUrl: `/js/${g}.js`,
-				} satisfies PortalResource,
-			]),
-		);
+	function mkResource(guid: string, type: PortalResource['type'] = 'web-file'): PortalResource {
+		return {
+			guid,
+			type,
+			name: guid,
+			contentPath: `/fake/${guid}`,
+			...(type === 'web-file' ? { runtimeUrl: `/js/${guid}.js` } : {}),
+		};
+	}
+	function mkPortal(entries: Array<[string, PortalResource['type']?]>): Map<string, PortalResource> {
+		return new Map(entries.map(([g, t]) => [g, mkResource(g, t)]));
 	}
 
-	it('passes when every entry target exists in the resource map', () => {
+	it('passes when every entry target exists in the resource map and layout matches', () => {
 		mkdirSync(join(tmp, 'src'), { recursive: true });
-		const config = { portalConfigPath: 'p', entryPoints: [{ source: 'a.ts', target: 'g1' }] };
-		expect(() => validateEntryPoints(config, tmp, mkPortal(['g1']))).not.toThrow();
+		const config = { portalConfigPath: 'p', entryPoints: [{ source: 'web-files/a.ts', target: 'g1' }] };
+		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).not.toThrow();
 	});
 
 	it('throws listing all missing targets', () => {
@@ -113,26 +111,53 @@ describe('validateEntryPoints', () => {
 		const config = {
 			portalConfigPath: 'p',
 			entryPoints: [
-				{ source: 'a.ts', target: 'g1' },
-				{ source: 'b.ts', target: 'missing' },
+				{ source: 'web-files/a.ts', target: 'g1' },
+				{ source: 'web-files/b.ts', target: 'missing' },
 			],
 		};
-		expect(() => validateEntryPoints(config, tmp, mkPortal(['g1']))).toThrowError(/do not match.*missing/s);
+		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).toThrowError(/do not match.*missing/s);
 	});
 
-	it('throws when two entries share a directory', () => {
+	it('throws when source is not a direct child of a configured root', () => {
+		mkdirSync(join(tmp, 'src'), { recursive: true });
+		const config = {
+			portalConfigPath: 'p',
+			entryPoints: [{ source: 'a.ts', target: 'g1' }],
+		};
+		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).toThrowError(/direct child/);
+	});
+
+	it('throws when nested deeper than direct child', () => {
+		mkdirSync(join(tmp, 'src'), { recursive: true });
+		const config = {
+			portalConfigPath: 'p',
+			entryPoints: [{ source: 'web-files/sub/a.ts', target: 'g1' }],
+		};
+		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).toThrowError(/direct child/);
+	});
+
+	it('throws when root does not match resource type', () => {
+		mkdirSync(join(tmp, 'src'), { recursive: true });
+		const config = {
+			portalConfigPath: 'p',
+			entryPoints: [{ source: 'web-files/a.ts', target: 'g1' }],
+		};
+		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-template']]))).toThrowError(/web-files.*web-template/);
+	});
+
+	it('allows multiple entries inside the same root directory', () => {
 		mkdirSync(join(tmp, 'src'), { recursive: true });
 		const config = {
 			portalConfigPath: 'p',
 			entryPoints: [
-				{ source: 'dir/a.ts', target: 'g1' },
-				{ source: 'dir/b.ts', target: 'g2' },
+				{ source: 'web-files/a.ts', target: 'g1' },
+				{ source: 'web-files/b.ts', target: 'g2' },
 			],
 		};
-		expect(() => validateEntryPoints(config, tmp, mkPortal(['g1', 'g2']))).toThrowError(/share the same directory/);
+		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file'], ['g2', 'web-file']]))).not.toThrow();
 	});
 
-	it('allows bare specifiers to coexist freely', () => {
+	it('allows bare specifiers only for web-file targets', () => {
 		const config = {
 			portalConfigPath: 'p',
 			entryPoints: [
@@ -140,6 +165,24 @@ describe('validateEntryPoints', () => {
 				{ source: 'react', target: 'g2' },
 			],
 		};
-		expect(() => validateEntryPoints(config, tmp, mkPortal(['g1', 'g2']))).not.toThrow();
+		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file'], ['g2', 'web-file']]))).not.toThrow();
+	});
+
+	it('rejects bare specifier targeting a web-template', () => {
+		const config = {
+			portalConfigPath: 'p',
+			entryPoints: [{ source: 'lodash', target: 'g1' }],
+		};
+		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-template']]))).toThrowError(/bare specifier/);
+	});
+
+	it('honours custom roots config', () => {
+		mkdirSync(join(tmp, 'src'), { recursive: true });
+		const config = {
+			portalConfigPath: 'p',
+			roots: { webFiles: 'wf' },
+			entryPoints: [{ source: 'wf/a.ts', target: 'g1' }],
+		};
+		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).not.toThrow();
 	});
 });

@@ -10,12 +10,14 @@ PowPow is a Power Pages pro-code development tool that streamlines the developme
 ## Features
 
 - **TypeScript & JSX support** — Write Power Pages code in TypeScript/TSX and have it transpiled and bundled automatically
+- **Three resource types** — Bundle web-templates, web-files, **and server-logic** (Power Pages server-side scripts) from a single project
 - **Rolldown bundler** — Fast, tree-shaken, minified ES module builds powered by [Rolldown](https://rolldown.rs)
 - **Local dev server** — Serves built assets over HTTP with CORS support for rapid iteration
 - **Watch mode** — Rebuilds on file changes with minimal delay (browser refresh is still manual today; live-reload is on the [roadmap](./ROADMAP.md))
-- **Interactive CLI** — Guided setup and resource mapping with `init` and `add` commands
-- **UMD globals** — Reference libraries like React or Bootstrap from `globalThis` instead of bundling them
-- **Smart module resolution** — Automatic inlining, externalizing, or shimming of imports based on entry point ownership
+- **Zero-config globals** — React, ReactDOM, jQuery, Bootstrap, `shell`, and `Microsoft.Dynamic365.Portal` are wired up automatically; just `import { useState } from 'react'`
+- **Bundled typings** — Power Pages global typings (`Server`, `Microsoft`, `shell`, plus React/jQuery/etc. ambient stubs) ship in the package; no `@types/*` install needed
+- **Build-time dependency graph** — Console summary flags duplicated modules across entries and shows which globals each entry uses
+- **Interactive CLI** — `powpow init` bootstraps a project end-to-end (npm/pnpm install, tsconfigs, scaffolding); `powpow add` wires up entry points
 - **Companion browser extension** — Use with [PowPow Interceptor](https://github.com/itera-fredrikstad/powpow-interceptor) to live-swap portal assets during development
 
 ## Prerequisites
@@ -23,55 +25,46 @@ PowPow is a Power Pages pro-code development tool that streamlines the developme
 - [Node.js](https://nodejs.org/) **v22** or later
 - A Power Pages portal downloaded locally via [`pac powerpages download`](https://learn.microsoft.com/en-us/power-pages/configure/cli-tutorial)
 
-## Installation
-
-```bash
-npm install powpow-cli
-```
-
-Or with pnpm:
-
-```bash
-pnpm add powpow-cli
-```
-
-TypeScript is an optional peer dependency. Install it if your source files use `.ts` / `.tsx`:
-
-```bash
-pnpm add -D typescript
-```
-
 ## Quick Start
 
-### 1. Initialize configuration
+### 1. Bootstrap a project
 
-Run `powpow init` in the root of your project. The wizard will ask for the path to your downloaded Power Pages portal directory and a source directory for your TypeScript files.
+In the root of your project (an empty directory is fine), run:
 
 ```bash
-npx powpow init
+npx powpow-cli init
 ```
 
-This creates a `powpow.config.json` file:
+This single command:
+
+- Asks whether you want **npm** or **pnpm** (auto-detected from existing lockfiles).
+- Creates `package.json` if missing.
+- Installs `powpow-cli` and `typescript` as devDependencies.
+- Adds `powpow:dev` and `powpow:build` scripts to `package.json`.
+- Scaffolds the strict source layout: `src/web-templates/`, `src/web-files/`, `src/server-logic/`.
+- Writes a root `tsconfig.json` (browser-typed) and a separate `src/server-logic/tsconfig.json` (server-typed, no DOM).
+- Writes the `.powpow/globals/*` shim files for the built-in UMD globals.
+- Writes a starter `powpow.config.json`.
+
+`init` is idempotent — re-running on an existing project skips files that already exist.
 
 ```json
 {
   "$schema": "./node_modules/powpow-cli/powpow.config.schema.json",
-  "version": "1.0",
   "portalConfigPath": "my-portal",
-  "sourceDir": "src",
   "entryPoints": []
 }
 ```
 
 ### 2. Add entry points
 
-Map a source file to a Power Pages resource (web template or web file):
+Map a source file to a Power Pages resource (web template, web file, or server logic):
 
 ```bash
 npx powpow add
 ```
 
-The interactive prompt will list available portal resources, let you pick one, and either create a new source file or link an existing one. The resulting entry point is saved to `powpow.config.json`.
+The interactive prompt lists available portal resources, lets you pick one, and either creates a new source file or links an existing one. The new file is placed in the root that matches the resource type — `src/web-templates/`, `src/web-files/`, or `src/server-logic/` — and stubbed with sensible starter content. The entry is appended to `powpow.config.json`.
 
 ### 3. Develop
 

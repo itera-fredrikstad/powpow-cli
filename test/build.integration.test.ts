@@ -30,11 +30,11 @@ describe('build (integration)', () => {
 			'adx_webtemplateid: 00000000-0000-0000-0000-0000000000aa\nadx_name: My Template\n',
 		);
 
-		writeFile('src/main.ts', `export const greeting = 'hello-from-test';\nconsole.log(greeting);\n`);
+		writeFile('src/web-templates/main.ts', `export const greeting = 'hello-from-test';\nconsole.log(greeting);\n`);
 
 		const config: PowpowConfig = {
 			portalConfigPath: 'portal',
-			entryPoints: [{ source: 'main.ts', target: '00000000-0000-0000-0000-0000000000aa' }],
+			entryPoints: [{ source: 'web-templates/main.ts', target: '00000000-0000-0000-0000-0000000000aa' }],
 		};
 
 		await build(config, tmp);
@@ -55,14 +55,14 @@ describe('build (integration)', () => {
 			'adx_webfileid: 00000000-0000-0000-0000-0000000000cc\nadx_name: lib.js\nadx_partialurl: lib.js\nfilename: lib.js\n',
 		);
 
-		writeFile('src/main.ts', `import { helper } from './lib/index';\nconsole.log(helper());\n`);
-		writeFile('src/lib/index.ts', `export function helper() { return 'lib-helper-value'; }\n`);
+		writeFile('src/web-templates/main.ts', `import { helper } from '../web-files/lib';\nconsole.log(helper());\n`);
+		writeFile('src/web-files/lib.ts', `export function helper() { return 'lib-helper-value'; }\n`);
 
 		const config: PowpowConfig = {
 			portalConfigPath: 'portal',
 			entryPoints: [
-				{ source: 'main.ts', target: '00000000-0000-0000-0000-0000000000bb' },
-				{ source: 'lib/index.ts', target: '00000000-0000-0000-0000-0000000000cc' },
+				{ source: 'web-templates/main.ts', target: '00000000-0000-0000-0000-0000000000bb' },
+				{ source: 'web-files/lib.ts', target: '00000000-0000-0000-0000-0000000000cc' },
 			],
 		};
 
@@ -77,14 +77,48 @@ describe('build (integration)', () => {
 	});
 
 	it('rejects when an entry target GUID has no matching portal resource', async () => {
-		writeFile('src/main.ts', 'export const x = 1;\n');
+		writeFile('src/web-templates/main.ts', 'export const x = 1;\n');
 
 		const config: PowpowConfig = {
 			portalConfigPath: 'portal',
-			entryPoints: [{ source: 'main.ts', target: 'no-such-guid' }],
+			entryPoints: [{ source: 'web-templates/main.ts', target: 'no-such-guid' }],
 		};
 
 		mkdirSync(join(tmp, 'portal'), { recursive: true });
 		await expect(build(config, tmp)).rejects.toThrow(/no-such-guid/);
+	});
+
+	it('bundles a server-logic entry as plain ESM with all imports inlined and no UMD globals', async () => {
+		writeFile(
+			'portal/server-logic/myLogic.serverlogic.yml',
+			'adx_serverlogicid: 00000000-0000-0000-0000-0000000000dd\nadx_name: myLogic\n',
+		);
+
+		writeFile(
+			'src/server-logic/myLogic.ts',
+			`import { foo } from '../lib/util';\ndeclare const Server: any;\nServer.Logger.Log(foo());\n`,
+		);
+		writeFile('src/lib/util.ts', `export function foo() { return 'sl-foo-value'; }\n`);
+
+		const config: PowpowConfig = {
+			portalConfigPath: 'portal',
+			// Configure react global to verify server-logic ignores it.
+			globals: { react: 'React' },
+			entryPoints: [{ source: 'server-logic/myLogic.ts', target: '00000000-0000-0000-0000-0000000000dd' }],
+		};
+
+		await build(config, tmp);
+
+		const outputPath = join(tmp, 'portal/server-logic/myLogic.js');
+		const output = readFileSync(outputPath, 'utf8');
+
+		// No <script> wrapper
+		expect(output).not.toMatch(/<script/);
+		// foo() got inlined — its return value is in the bundle
+		expect(output).toContain('sl-foo-value');
+		// No remaining ESM `import` statement for ../lib/util
+		expect(output).not.toMatch(/import[^;]*['"]\.\.\/lib\/util['"]/);
+		// No globalThis["React"] / React UMD references
+		expect(output).not.toMatch(/globalThis\[["']React["']\]/);
 	});
 });

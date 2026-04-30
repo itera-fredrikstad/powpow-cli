@@ -1,10 +1,10 @@
-import { existsSync, globSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { basename, dirname, relative, resolve } from 'node:path';
 import { confirm, input, select } from '@inquirer/prompts';
-import { loadAndValidate, saveConfig } from '../config.js';
+import { loadAndValidate, resolveRoots, saveConfig } from '../config.js';
 import { log } from '../log.js';
 import { scanPortalResources } from '../resources.js';
-import type { PortalResource } from '../types.js';
+import type { PortalResource, ResourceType } from '../types.js';
 
 interface AddOptions {
 	configPath?: string;
@@ -14,7 +14,7 @@ export async function add({ configPath }: AddOptions): Promise<void> {
 	const { configPath: resolvedConfigPath, config, portalDir: absPortalDir, sourceDir: absSourceDir } = loadAndValidate(configPath);
 
 	// Scan available portal resources
-	const resources = scanPortalResources(absPortalDir);
+	const resources = scanPortalResources(absPortalDir, config.roots);
 	if (resources.size === 0) {
 		log.errorRaw(`No portal resources found in ${absPortalDir}`);
 		process.exit(1);
@@ -37,28 +37,24 @@ export async function add({ configPath }: AddOptions): Promise<void> {
 	// Group by type for display
 	const webTemplates = available.filter((r) => r.type === 'web-template');
 	const webFiles = available.filter((r) => r.type === 'web-file' && /\.(js|css)$/i.test(r.contentPath));
+	const serverLogic = available.filter((r) => r.type === 'server-logic');
 
 	type Choice = { name: string; value: PortalResource; description: string };
 	const choices: Choice[] = [];
 
-	if (webTemplates.length > 0) {
-		for (const r of webTemplates.sort((a, b) => a.name.localeCompare(b.name))) {
-			choices.push({
-				name: `[web-template] ${r.name}`,
-				value: r,
-				description: r.guid,
-			});
-		}
+	for (const r of webTemplates.sort((a, b) => a.name.localeCompare(b.name))) {
+		choices.push({ name: `[web-template] ${r.name}`, value: r, description: r.guid });
+	}
+	for (const r of webFiles.sort((a, b) => a.name.localeCompare(b.name))) {
+		choices.push({ name: `[web-file] ${r.name}`, value: r, description: r.guid });
+	}
+	for (const r of serverLogic.sort((a, b) => a.name.localeCompare(b.name))) {
+		choices.push({ name: `[server-logic] ${r.name}`, value: r, description: r.guid });
 	}
 
-	if (webFiles.length > 0) {
-		for (const r of webFiles.sort((a, b) => a.name.localeCompare(b.name))) {
-			choices.push({
-				name: `[web-file] ${r.name}`,
-				value: r,
-				description: r.guid,
-			});
-		}
+	if (choices.length === 0) {
+		console.log('No unmapped resources available.');
+		return;
 	}
 
 	const selected = await select({
@@ -66,57 +62,44 @@ export async function add({ configPath }: AddOptions): Promise<void> {
 		choices,
 	});
 
-	// Ask for source file
-	const sourceAction = await select({
-		message: 'Source file:',
-		choices: [
-			{ name: 'Create a new TypeScript file', value: 'create' as const },
-			{ name: 'Select an existing file', value: 'existing' as const },
-		],
-	});
+	const resourceType: ResourceType = selected.type;
+	const roots = resolveRoots(config);
 
+	// Determine the root subdirectory for this resource type
+	const rootSubdir =
+		resourceType === 'web-template'
+			? roots.webTemplates
+			: resourceType === 'web-file'
+				? roots.webFiles
+				: roots.serverLogic;
+
+	const absRootDir = resolve(absSourceDir, rootSubdir);
+
+	// For web-file: allow bare specifier or file
 	let sourceRelative: string;
 
-	if (sourceAction === 'create') {
-		const defaultName = sanitizeFilename(selected.name) + '.ts';
-		const filename = await input({
-			message: `File path (relative to ${config.sourceDir ?? 'src'}/):`,
-			default: defaultName,
+	if (resourceType === 'web-file') {
+		const sourceMode = await select({
+			message: 'Source:',
+			choices: [
+				{ name: 'Create a new TypeScript file', value: 'create' as const },
+				{ name: 'Use a bare npm specifier (e.g. "lodash")', value: 'bare' as const },
+			],
 		});
 
-		const absPath = resolve(absSourceDir, filename);
-
-		if (existsSync(absPath)) {
-			const overwrite = await confirm({
-				message: `${absPath} already exists. Overwrite?`,
-				default: false,
+		if (sourceMode === 'bare') {
+			sourceRelative = await input({
+				message: 'Bare npm specifier:',
+				validate(v) {
+					if (!v.trim()) return 'Specifier is required';
+					return true;
+				},
 			});
-			if (overwrite) {
-				writeFileSync(absPath, `// Entry point for "${selected.name}"\nexport {};\n`);
-				log.successRaw(`Overwrote ${absPath}`);
-			} else {
-				log.successRaw(`Keeping existing file at ${absPath}`);
-			}
 		} else {
-			mkdirSync(dirname(absPath), { recursive: true });
-			writeFileSync(absPath, `// Entry point for "${selected.name}"\nexport {};\n`);
-			log.successRaw(`Created ${absPath}`);
+			sourceRelative = await promptCreateFile(selected, resourceType, rootSubdir, absRootDir, absSourceDir);
 		}
-
-		sourceRelative = filename;
 	} else {
-		// List existing files in source dir
-		const files = globSync('**/*.{ts,tsx,js,jsx}', { cwd: absSourceDir });
-
-		if (files.length === 0) {
-			log.errorRaw(`No source files found in ${absSourceDir}`);
-			process.exit(1);
-		}
-
-		sourceRelative = await select({
-			message: 'Select a source file:',
-			choices: files.sort().map((f) => ({ name: f, value: f })),
-		});
+		sourceRelative = await promptCreateFile(selected, resourceType, rootSubdir, absRootDir, absSourceDir);
 	}
 
 	// Add entry point to config
@@ -126,8 +109,87 @@ export async function add({ configPath }: AddOptions): Promise<void> {
 	});
 
 	saveConfig(resolvedConfigPath, config);
-
 	log.successRaw(`✓ Added entry: "${sourceRelative}" → ${selected.type} "${selected.name}" (${selected.guid})`);
+}
+
+async function promptCreateFile(
+	selected: PortalResource,
+	resourceType: ResourceType,
+	rootSubdir: string,
+	absRootDir: string,
+	absSourceDir: string,
+): Promise<string> {
+	const ext = resourceType === 'web-template' ? '.tsx' : '.ts';
+	const defaultName = sanitizeFilename(selected.name) + ext;
+
+	const filename = await input({
+		message: `Filename (inside ${rootSubdir}/):`,
+		default: defaultName,
+		validate(value) {
+			if (!value.trim()) return 'Filename is required';
+			// Must be a direct child — no path separators (other than a leading ./ which we strip)
+			const stripped = value.trim().replace(/^\.\//, '');
+			if (stripped.includes('/') || stripped.includes('\\')) {
+				return `File must be a direct child of ${rootSubdir}/ (no subdirectories)`;
+			}
+			return true;
+		},
+	});
+
+	const cleanName = filename.trim().replace(/^\.\//, '');
+	const absPath = resolve(absRootDir, cleanName);
+
+	// Validate the resolved path is directly under the root (defensive)
+	const rel = relative(absRootDir, absPath);
+	if (rel.includes('..') || rel.includes('/')) {
+		log.errorRaw(`File path must be a direct child of ${rootSubdir}/`);
+		process.exit(1);
+	}
+
+	if (existsSync(absPath)) {
+		const overwrite = await confirm({
+			message: `${absPath} already exists. Overwrite?`,
+			default: false,
+		});
+		if (overwrite) {
+			writeFileSync(absPath, scaffoldContent(selected.name, resourceType));
+			log.successRaw(`Overwrote ${absPath}`);
+		} else {
+			log.successRaw(`Keeping existing file at ${absPath}`);
+		}
+	} else {
+		mkdirSync(dirname(absPath), { recursive: true });
+		writeFileSync(absPath, scaffoldContent(selected.name, resourceType));
+		log.successRaw(`Created ${absPath}`);
+	}
+
+	return `${rootSubdir}/${cleanName}`;
+}
+
+function scaffoldContent(name: string, type: ResourceType): string {
+	switch (type) {
+		case 'web-template':
+			return [
+				`import { createRoot } from 'react-dom';`,
+				`import { createElement } from 'react';`,
+				``,
+				`function App() {`,
+				`\treturn createElement('div', null, '${name}');`,
+				`}`,
+				``,
+				`const container = document.getElementById('app');`,
+				`if (container) {`,
+				`\tcreateRoot(container).render(createElement(App));`,
+				`}`,
+				``,
+			].join('\n');
+
+		case 'web-file':
+			return `export {};\n`;
+
+		case 'server-logic':
+			return `Server.Logger.Log('${name} invoked');\n`;
+	}
 }
 
 function sanitizeFilename(name: string): string {
