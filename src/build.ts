@@ -12,7 +12,7 @@ import { RUNTIME_URL_PREFIX } from './plugin/context.js';
 import { buildGraph, printGraphSummary } from './graph.js';
 import { powpow } from './plugin/index.js';
 import { scanPortalResources } from './resources.js';
-import { DEFAULT_BROWSER_GLOBALS, writeShims } from './shims.js';
+import { DEFAULT_BROWSER_GLOBALS } from './shims.js';
 import type { PortalResource, PowpowConfig } from './types.js';
 
 interface BuildOptions {
@@ -148,9 +148,6 @@ export async function build(
 			globalsUsed: new Set(),
 		});
 	}
-
-	// Ensure shim files for known globals are up-to-date before bundling
-	writeShims(projectRoot, { ...DEFAULT_BROWSER_GLOBALS, ...config.globals });
 
 	const results = await Promise.allSettled(
 		resolvedEntries.map((entry) => {

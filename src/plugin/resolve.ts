@@ -9,7 +9,7 @@ import { type PluginContext, RUNTIME_URL_PREFIX, UMD_VIRTUAL_PREFIX } from './co
 const SUFFIXES = ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js', '/index.jsx'];
 
 export function createResolveIdHook(ctx: PluginContext): Plugin['resolveId'] {
-	const { currentEntry, entries, projectRoot, globalsMap, inlinedPackages, resolutionLog } = ctx;
+	const { currentEntry, entries, globalsMap, inlinedPackages, resolutionLog } = ctx;
 	const isServerLogic = currentEntry.type === 'server-logic';
 
 	function findBareEntry(specifier: string): ResolvedEntry | null {
@@ -24,7 +24,7 @@ export function createResolveIdHook(ctx: PluginContext): Plugin['resolveId'] {
 		if (specifier.startsWith(UMD_VIRTUAL_PREFIX)) return specifier;
 
 		// Prefer shim files for known globals
-		const shimPath = resolveShim(specifier, projectRoot, globalsMap);
+		const shimPath = resolveShim(specifier, globalsMap);
 		if (shimPath) return shimPath;
 
 		if (specifier in globalsMap) {

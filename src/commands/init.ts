@@ -3,7 +3,6 @@ import { resolve } from 'node:path';
 import { input, select } from '@inquirer/prompts';
 import { log } from '../log.js';
 import { addDevCmd, detectPackageManager, initCmd, runPm } from '../pm.js';
-import { DEFAULT_BROWSER_GLOBALS, writeShims } from '../shims.js';
 import type { PackageManager } from '../pm.js';
 
 interface InitOptions {
@@ -136,8 +135,8 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 		log.success('Created tsconfig.json');
 	}
 
-	// ── Step 8: Write server-logic tsconfig if missing ────────────────────────
-	const serverTsconfig = resolve(projectRoot, sourceDir, 'server-logic', 'tsconfig.json');
+	// ── Step 8: Write server-logic tsconfig at project root if missing ───────
+	const serverTsconfig = resolve(projectRoot, 'tsconfig.server-logic.json');
 	if (!existsSync(serverTsconfig)) {
 		const content = {
 			extends: 'powpow-cli/tsconfig.base.json',
@@ -145,19 +144,13 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 				lib: ['ES2022'],
 				types: ['powpow-cli/types/server'],
 			},
-			include: ['./**/*'],
+			include: [`${sourceDir}/server-logic/**/*`],
 		};
-		// Ensure the directory exists (may have been skipped if dir already existed)
-		mkdirSync(resolve(projectRoot, sourceDir, 'server-logic'), { recursive: true });
 		writeFileSync(serverTsconfig, JSON.stringify(content, null, '\t') + '\n');
-		log.success('Created src/server-logic/tsconfig.json');
+		log.success('Created tsconfig.server-logic.json');
 	}
 
-	// ── Step 9: Write shim files ──────────────────────────────────────────────
-	writeShims(projectRoot, DEFAULT_BROWSER_GLOBALS);
-	log.success('Wrote .powpow/globals/ shim files');
-
-	// ── Step 10: Write powpow.config.json if missing ─────────────────────────
+	// ── Step 9: Write powpow.config.json if missing ─────────────────────────
 	if (!existsSync(targetConfigPath)) {
 		const config = {
 			$schema: './node_modules/powpow-cli/powpow.config.schema.json',

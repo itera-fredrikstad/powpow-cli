@@ -72,14 +72,26 @@ function callHook(
 }
 
 describe('createResolveIdHook — UMD globals', () => {
-	it('routes a globals-mapped specifier to a virtual UMD id', () => {
+	it('resolves a globals-mapped specifier to its bundled shim file', () => {
 		const ctx = mkCtx({
 			currentEntry: { source: 'web-templates/main.ts', resource: mkResource({ guid: 'g', type: 'web-template' }) },
 			entries: [{ source: 'web-templates/main.ts', resource: mkResource({ guid: 'g', type: 'web-template' }) }],
 			globalsMap: { react: 'React' },
 		});
 		const hook = createResolveIdHook(ctx);
-		expect(callHook(hook, 'react', '/project/src/web-templates/main.ts')).toEqual({ id: `${UMD_VIRTUAL_PREFIX}react` });
+		const result = callHook(hook, 'react', '/project/src/web-templates/main.ts');
+		expect(typeof result).toBe('string');
+		expect(result as string).toMatch(/shims\/react\.js$/);
+	});
+
+	it('falls back to a virtual UMD id when no shim file exists for the specifier', () => {
+		const ctx = mkCtx({
+			currentEntry: { source: 'web-templates/main.ts', resource: mkResource({ guid: 'g', type: 'web-template' }) },
+			entries: [{ source: 'web-templates/main.ts', resource: mkResource({ guid: 'g', type: 'web-template' }) }],
+			globalsMap: { 'my-custom-lib': 'MyLib' },
+		});
+		const hook = createResolveIdHook(ctx);
+		expect(callHook(hook, 'my-custom-lib', '/project/src/web-templates/main.ts')).toEqual({ id: `${UMD_VIRTUAL_PREFIX}my-custom-lib` });
 	});
 
 	it('passes through previously-issued virtual UMD ids', () => {
