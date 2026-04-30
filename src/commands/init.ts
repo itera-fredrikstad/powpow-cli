@@ -123,11 +123,30 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 		}
 	}
 
-	// ── Step 7: Write root tsconfig.json if missing ───────────────────────────
+	// ── Step 7: Write root tsconfig.json (browser entries) ───────────────────
 	const rootTsconfig = resolve(projectRoot, 'tsconfig.json');
 	if (!existsSync(rootTsconfig)) {
 		const content = {
-			extends: 'powpow-cli/tsconfig.base.json',
+			compilerOptions: {
+				target: 'ES2023',
+				lib: ['ES2023', 'DOM', 'DOM.Iterable'],
+				module: 'ESNext',
+				moduleResolution: 'bundler',
+				jsx: 'react-jsx',
+				types: ['powpow-cli/types/browser'],
+				allowImportingTsExtensions: true,
+				verbatimModuleSyntax: true,
+				moduleDetection: 'force',
+				useDefineForClassFields: true,
+				noEmit: true,
+				skipLibCheck: true,
+				strict: true,
+				noUnusedLocals: true,
+				noUnusedParameters: true,
+				erasableSyntaxOnly: true,
+				noFallthroughCasesInSwitch: true,
+				noUncheckedSideEffectImports: true,
+			},
 			include: [`${sourceDir}/**/*`],
 			exclude: [`${sourceDir}/server-logic/**/*`],
 		};
@@ -135,16 +154,31 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 		log.success('Created tsconfig.json');
 	}
 
-	// ── Step 8: Write server-logic tsconfig at project root if missing ───────
+	// ── Step 8: Write server-logic tsconfig at project root ──────────────────
 	const serverTsconfig = resolve(projectRoot, 'tsconfig.server-logic.json');
 	if (!existsSync(serverTsconfig)) {
 		const content = {
-			extends: 'powpow-cli/tsconfig.base.json',
 			compilerOptions: {
-				lib: ['ES2022'],
+				target: 'ES2023',
+				lib: ['ES2023'],
+				module: 'ESNext',
+				moduleResolution: 'bundler',
 				types: ['powpow-cli/types/server'],
+				allowImportingTsExtensions: true,
+				verbatimModuleSyntax: true,
+				moduleDetection: 'force',
+				useDefineForClassFields: true,
+				noEmit: true,
+				skipLibCheck: true,
+				strict: true,
+				noUnusedLocals: true,
+				noUnusedParameters: true,
+				erasableSyntaxOnly: true,
+				noFallthroughCasesInSwitch: true,
+				noUncheckedSideEffectImports: true,
 			},
 			include: [`${sourceDir}/server-logic/**/*`],
+			exclude: [`${sourceDir}/web-templates/**/*`, `${sourceDir}/web-files/**/*`],
 		};
 		writeFileSync(serverTsconfig, JSON.stringify(content, null, '\t') + '\n');
 		log.success('Created tsconfig.server-logic.json');

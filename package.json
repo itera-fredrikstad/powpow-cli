@@ -29,7 +29,6 @@
 		"dist",
 		"types",
 		"shims",
-		"tsconfig.base.json",
 		"powpow.config.schema.json"
 	],
 	"scripts": {

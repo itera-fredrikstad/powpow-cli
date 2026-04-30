@@ -218,16 +218,12 @@ The server is designed to work with the [PowPow Interceptor](https://github.com/
 
 ## TypeScript Configuration
 
-PowPow ships a `tsconfig.base.json` that consuming projects can extend for type-checking their browser-targeted source files:
+`powpow init` writes two self-contained tsconfigs in your project root:
 
-```json
-{
-  "extends": "powpow-cli/tsconfig.base.json",
-  "include": ["src"]
-}
-```
+- **`tsconfig.json`** — for browser entries (`src/web-templates/`, `src/web-files/`). Targets ES2023, includes DOM lib, enables JSX (React JSX transform), and references `powpow-cli/types/browser` for the Power Pages browser globals.
+- **`tsconfig.server-logic.json`** — for server-logic entries (`src/server-logic/`). Targets ES2023 without DOM, no JSX, and references `powpow-cli/types/server` so only the `Server` global is in scope.
 
-This base config targets ES2023 with DOM types, enables JSX (React JSX transform), strict mode, and bundler module resolution.
+Each tsconfig `include`s its own root and `exclude`s the others, so a single editor instance can typecheck both worlds with the right ambient types in each directory. Both files are plain compilerOptions — they do not extend any base config from the package.
 
 ## Programmatic API
 
