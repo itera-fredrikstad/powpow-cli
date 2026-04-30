@@ -178,7 +178,6 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 				noUncheckedSideEffectImports: true,
 			},
 			include: [`${sourceDir}/server-logic/**/*`],
-			exclude: [`${sourceDir}/web-templates/**/*`, `${sourceDir}/web-files/**/*`],
 		};
 		writeFileSync(serverTsconfig, JSON.stringify(content, null, '\t') + '\n');
 		log.success('Created tsconfig.server-logic.json');

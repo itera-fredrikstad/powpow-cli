@@ -134,7 +134,5 @@ interface Server {
 }
 
 declare global {
-	interface Window {
-		Server: Server;
-	}
+	const Server: Server;
 }
