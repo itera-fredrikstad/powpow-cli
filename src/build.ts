@@ -6,10 +6,10 @@ import type { InputOptions, OutputOptions } from 'rolldown';
 import { rolldown } from 'rolldown';
 import { resolvePortalDir, validateEntryPoints } from './config.js';
 import { type ResolvedEntry, resolveEntries } from './entries.js';
+import { buildGraph, printGraphSummary } from './graph.js';
 import { log } from './log.js';
 import type { CollectedOutput, EntryResolutionLog } from './plugin/context.js';
 import { RUNTIME_URL_PREFIX } from './plugin/context.js';
-import { buildGraph, printGraphSummary } from './graph.js';
 import { powpow } from './plugin/index.js';
 import { scanPortalResources } from './resources.js';
 import { DEFAULT_BROWSER_GLOBALS } from './shims.js';
@@ -32,13 +32,9 @@ function createEntryBuildConfig(
 	options: BuildOptions,
 ): { inputOptions: InputOptions; outputOptions: OutputOptions } {
 	const sourceDir = config.sourceDir ?? 'src';
-	const entryOptions = config.entryPoints.find(
-		(e) => e.source === currentEntry.source && e.target === currentEntry.resource.guid,
-	)?.options;
+	const entryOptions = config.entryPoints.find((e) => e.source === currentEntry.source && e.target === currentEntry.resource.guid)?.options;
 	const isServerLogic = currentEntry.type === 'server-logic';
-	const mergedGlobals = isServerLogic
-		? {}
-		: { ...DEFAULT_BROWSER_GLOBALS, ...config.globals, ...entryOptions?.globals };
+	const mergedGlobals = isServerLogic ? {} : { ...DEFAULT_BROWSER_GLOBALS, ...config.globals, ...entryOptions?.globals };
 	const minify = entryOptions?.minify ?? config.minify ?? !options.dev;
 	const sourceMap = entryOptions?.sourceMap ?? config.sourceMap ?? !!options.dev;
 
@@ -102,10 +98,7 @@ async function buildEntry(
 	return new Set(watchFiles.map(toPosix));
 }
 
-function finalizeOutputs(
-	outputCollector: Map<string, CollectedOutput>,
-	lastWritten: Map<string, string>,
-): void {
+function finalizeOutputs(outputCollector: Map<string, CollectedOutput>, lastWritten: Map<string, string>): void {
 	const urlToHash = new Map<string, string>();
 	for (const { resource, content } of outputCollector.values()) {
 		if (resource.type === 'web-file' && resource.runtimeUrl) {
@@ -308,10 +301,7 @@ export async function watchBuild(
 				if (!fullRebuild) {
 					const affected = affectedEntries(changes, resolvedEntries, state.entryFiles);
 					if (affected.length === 0) {
-						log.info(
-							`No entries depend on the changed file${changes.size === 1 ? '' : 's'} — skipping rebuild.`,
-							'watch',
-						);
+						log.info(`No entries depend on the changed file${changes.size === 1 ? '' : 's'} — skipping rebuild.`, 'watch');
 						continue;
 					}
 					for (const { entry, reason } of affected) {

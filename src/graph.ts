@@ -89,10 +89,7 @@ export function printGraphSummary(graph: DependencyGraph): void {
 					return e ? `"${e.name}"` : guid;
 				})
 				.join(', ');
-			log.warn(
-				`Module "${module}" is bundled by ${entries.length} entries: ${names}. Consider extracting to a web-file entry.`,
-				'graph',
-			);
+			log.warn(`Module "${module}" is bundled by ${entries.length} entries: ${names}. Consider extracting to a web-file entry.`, 'graph');
 		}
 	}
 

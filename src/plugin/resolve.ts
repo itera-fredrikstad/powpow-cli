@@ -40,9 +40,7 @@ export function createResolveIdHook(ctx: PluginContext): Plugin['resolveId'] {
 			if (bareEntry) {
 				if (bareEntry.resource.type === 'web-file') {
 					if (isServerLogic) {
-						throw new Error(
-							`server-logic entries must inline all imports; "${specifier}" resolved to another entry "${bareEntry.source}".`,
-						);
+						throw new Error(`server-logic entries must inline all imports; "${specifier}" resolved to another entry "${bareEntry.source}".`);
 					}
 					resolutionLog?.externalized.push({ specifier, via: 'cross-entry', target: bareEntry.resource.guid });
 					return { id: RUNTIME_URL_PREFIX + bareEntry.resource.runtimeUrl!, external: true };
@@ -55,9 +53,7 @@ export function createResolveIdHook(ctx: PluginContext): Plugin['resolveId'] {
 					return null;
 				}
 				if (bareEntry.resource.type === 'server-logic') {
-					throw new Error(
-						`Cannot import server-logic entry "${bareEntry.source}" from "${currentEntry.source}".`,
-					);
+					throw new Error(`Cannot import server-logic entry "${bareEntry.source}" from "${currentEntry.source}".`);
 				}
 			}
 
@@ -89,18 +85,14 @@ export function createResolveIdHook(ctx: PluginContext): Plugin['resolveId'] {
 
 				if (owner.type === 'web-file') {
 					if (isServerLogic) {
-						throw new Error(
-							`server-logic entries must inline all imports; "${specifier}" resolved to another entry "${owner.source}".`,
-						);
+						throw new Error(`server-logic entries must inline all imports; "${specifier}" resolved to another entry "${owner.source}".`);
 					}
 					resolutionLog?.externalized.push({ specifier, via: 'cross-entry', target: owner.resource.guid });
 					return { id: RUNTIME_URL_PREFIX + owner.resource.runtimeUrl!, external: true };
 				}
 				if (owner.type === 'web-template') {
 					if (isServerLogic) {
-						throw new Error(
-							`server-logic entries must inline all imports; "${specifier}" resolved to another entry "${owner.source}".`,
-						);
+						throw new Error(`server-logic entries must inline all imports; "${specifier}" resolved to another entry "${owner.source}".`);
 					}
 					log.warn(
 						`"${currentEntry.source}" imports "${specifier}" which is owned by ` +

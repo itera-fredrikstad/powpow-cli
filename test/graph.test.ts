@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildGraph } from '../src/graph.js';
 import type { ResolvedEntry } from '../src/entries.js';
+import { buildGraph } from '../src/graph.js';
 import type { EntryResolutionLog } from '../src/plugin/context.js';
 import type { PortalResource } from '../src/types.js';
 
@@ -94,9 +94,7 @@ describe('buildGraph', () => {
 
 	it('builds graph entries with correct shape', () => {
 		const entry = mkEntry('guid-1', 'web-template');
-		const logs = new Map<string, EntryResolutionLog>([
-			['guid-1', mkLog(['lodash'], ['React'])],
-		]);
+		const logs = new Map<string, EntryResolutionLog>([['guid-1', mkLog(['lodash'], ['React'])]]);
 
 		const graph = buildGraph([entry], logs);
 

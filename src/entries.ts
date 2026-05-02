@@ -9,11 +9,7 @@ export interface ResolvedEntry {
 	type: ResourceType;
 }
 
-export function resolveEntries(
-	config: PowpowConfig,
-	resourceMap: Map<string, PortalResource>,
-	sourceDir: string,
-): ResolvedEntry[] {
+export function resolveEntries(config: PowpowConfig, resourceMap: Map<string, PortalResource>, sourceDir: string): ResolvedEntry[] {
 	const out: ResolvedEntry[] = [];
 	for (const entry of config.entryPoints) {
 		const resource = resourceMap.get(entry.target);

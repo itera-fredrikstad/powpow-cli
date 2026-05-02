@@ -89,15 +89,9 @@ describe('build (integration)', () => {
 	});
 
 	it('bundles a server-logic entry as plain ESM with all imports inlined and no UMD globals', async () => {
-		writeFile(
-			'portal/server-logic/myLogic.serverlogic.yml',
-			'adx_serverlogicid: 00000000-0000-0000-0000-0000000000dd\nadx_name: myLogic\n',
-		);
+		writeFile('portal/server-logic/myLogic.serverlogic.yml', 'adx_serverlogicid: 00000000-0000-0000-0000-0000000000dd\nadx_name: myLogic\n');
 
-		writeFile(
-			'src/server-logic/myLogic.ts',
-			`import { foo } from '../lib/util';\ndeclare const Server: any;\nServer.Logger.Log(foo());\n`,
-		);
+		writeFile('src/server-logic/myLogic.ts', `import { foo } from '../lib/util';\ndeclare const Server: any;\nServer.Logger.Log(foo());\n`);
 		writeFile('src/lib/util.ts', `export function foo() { return 'sl-foo-value'; }\n`);
 
 		const config: PowpowConfig = {

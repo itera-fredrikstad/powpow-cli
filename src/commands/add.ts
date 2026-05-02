@@ -66,12 +66,7 @@ export async function add({ configPath }: AddOptions): Promise<void> {
 	const roots = resolveRoots(config);
 
 	// Determine the root subdirectory for this resource type
-	const rootSubdir =
-		resourceType === 'web-template'
-			? roots.webTemplates
-			: resourceType === 'web-file'
-				? roots.webFiles
-				: roots.serverLogic;
+	const rootSubdir = resourceType === 'web-template' ? roots.webTemplates : resourceType === 'web-file' ? roots.webFiles : roots.serverLogic;
 
 	const absRootDir = resolve(absSourceDir, rootSubdir);
 

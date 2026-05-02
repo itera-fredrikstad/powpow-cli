@@ -66,10 +66,7 @@ describe('scanPortalResources', () => {
 
 	it('discovers server-logic resources by their yml metadata', () => {
 		writeFile('server-logic/doStuff.js', '// server logic');
-		writeFile(
-			'server-logic/doStuff.serverlogic.yml',
-			'adx_serverlogicid: 00000000-0000-0000-0000-00000000cccc\nadx_name: doStuff\n',
-		);
+		writeFile('server-logic/doStuff.serverlogic.yml', 'adx_serverlogicid: 00000000-0000-0000-0000-00000000cccc\nadx_name: doStuff\n');
 
 		const resources = scanPortalResources(tmp);
 		const resource = resources.get('00000000-0000-0000-0000-00000000cccc');
@@ -82,10 +79,7 @@ describe('scanPortalResources', () => {
 
 	it('honours configurable root directory names', () => {
 		writeFile('custom-templates/x/x.webtemplate.source.html', '');
-		writeFile(
-			'custom-templates/x/x.webtemplate.yml',
-			'adx_webtemplateid: 00000000-0000-0000-0000-00000000dddd\nadx_name: x\n',
-		);
+		writeFile('custom-templates/x/x.webtemplate.yml', 'adx_webtemplateid: 00000000-0000-0000-0000-00000000dddd\nadx_name: x\n');
 		const resources = scanPortalResources(tmp, { webTemplates: 'custom-templates' });
 		expect(resources.get('00000000-0000-0000-0000-00000000dddd')?.type).toBe('web-template');
 	});

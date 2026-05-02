@@ -33,17 +33,11 @@ function mkEntry(spec: EntrySpec): ResolvedEntry {
 	};
 }
 
-function mkCtx(overrides: {
-	currentEntry: EntrySpec;
-	entries: EntrySpec[];
-	globalsMap?: Record<string, string>;
-}): PluginContext {
+function mkCtx(overrides: { currentEntry: EntrySpec; entries: EntrySpec[]; globalsMap?: Record<string, string> }): PluginContext {
 	const allEntries = overrides.entries.map(mkEntry);
 	const currentEntry = mkEntry(overrides.currentEntry);
 	// Replace the matching entry in allEntries by identity if present
-	const idx = allEntries.findIndex(
-		(e) => e.source === currentEntry.source && e.resource.guid === currentEntry.resource.guid,
-	);
+	const idx = allEntries.findIndex((e) => e.source === currentEntry.source && e.resource.guid === currentEntry.resource.guid);
 	if (idx >= 0) allEntries[idx] = currentEntry;
 	else allEntries.push(currentEntry);
 

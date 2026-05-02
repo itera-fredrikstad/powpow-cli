@@ -154,7 +154,16 @@ describe('validateEntryPoints', () => {
 				{ source: 'web-files/b.ts', target: 'g2' },
 			],
 		};
-		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file'], ['g2', 'web-file']]))).not.toThrow();
+		expect(() =>
+			validateEntryPoints(
+				config,
+				tmp,
+				mkPortal([
+					['g1', 'web-file'],
+					['g2', 'web-file'],
+				]),
+			),
+		).not.toThrow();
 	});
 
 	it('allows bare specifiers only for web-file targets', () => {
@@ -165,7 +174,16 @@ describe('validateEntryPoints', () => {
 				{ source: 'react', target: 'g2' },
 			],
 		};
-		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file'], ['g2', 'web-file']]))).not.toThrow();
+		expect(() =>
+			validateEntryPoints(
+				config,
+				tmp,
+				mkPortal([
+					['g1', 'web-file'],
+					['g2', 'web-file'],
+				]),
+			),
+		).not.toThrow();
 	});
 
 	it('rejects bare specifier targeting a web-template', () => {
