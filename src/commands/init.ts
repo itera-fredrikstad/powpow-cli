@@ -66,6 +66,16 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 			log.error(`Failed to run "${pm} init": ${msg}`);
 			process.exit(1);
 		}
+
+		// `<pm> init` defaults the name to the directory basename, which may contain
+		// characters npm rejects (uppercase, spaces, etc.). Sanitize it.
+		const initialPkg = readPkgJson(pkgJsonPath);
+		const sanitized = sanitizePackageName(initialPkg.name);
+		if (sanitized !== initialPkg.name) {
+			initialPkg.name = sanitized;
+			writeFileSync(pkgJsonPath, `${JSON.stringify(initialPkg, null, 2)}\n`);
+			log.info(`Renamed package to "${sanitized}" (sanitized from directory name)`);
+		}
 	}
 
 	// ── Step 4: Install missing dev deps ──────────────────────────────────────
@@ -123,67 +133,40 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 		}
 	}
 
-	// ── Step 7: Write root tsconfig.json (browser entries) ───────────────────
+	// ── Step 7: Write root tsconfig.json (project references solution root) ──
 	const rootTsconfig = resolve(projectRoot, 'tsconfig.json');
 	if (!existsSync(rootTsconfig)) {
 		const content = {
-			compilerOptions: {
-				target: 'ES2023',
-				lib: ['ES2023', 'DOM', 'DOM.Iterable'],
-				module: 'ESNext',
-				moduleResolution: 'bundler',
-				jsx: 'react-jsx',
-				types: ['powpow-cli/types/browser'],
-				allowImportingTsExtensions: true,
-				verbatimModuleSyntax: true,
-				moduleDetection: 'force',
-				useDefineForClassFields: true,
-				noEmit: true,
-				skipLibCheck: true,
-				strict: true,
-				noUnusedLocals: true,
-				noUnusedParameters: true,
-				erasableSyntaxOnly: true,
-				noFallthroughCasesInSwitch: true,
-				noUncheckedSideEffectImports: true,
-			},
-			include: [`${sourceDir}/**/*`],
-			exclude: [`${sourceDir}/server-logic/**/*`],
+			files: [],
+			references: [{ path: './tsconfig.web.json' }, { path: './tsconfig.server-logic.json' }],
 		};
 		writeFileSync(rootTsconfig, JSON.stringify(content, null, '\t') + '\n');
 		log.success('Created tsconfig.json');
 	}
 
-	// ── Step 8: Write server-logic tsconfig at project root ──────────────────
+	// ── Step 8: Write web tsconfig (extends powpow-cli base) ─────────────────
+	const webTsconfig = resolve(projectRoot, 'tsconfig.web.json');
+	if (!existsSync(webTsconfig)) {
+		const content = {
+			extends: 'powpow-cli/tsconfig.web.base.json',
+			include: [`${sourceDir}/web-templates/**/*`, `${sourceDir}/web-files/**/*`],
+		};
+		writeFileSync(webTsconfig, JSON.stringify(content, null, '\t') + '\n');
+		log.success('Created tsconfig.web.json');
+	}
+
+	// ── Step 9: Write server-logic tsconfig (extends powpow-cli base) ────────
 	const serverTsconfig = resolve(projectRoot, 'tsconfig.server-logic.json');
 	if (!existsSync(serverTsconfig)) {
 		const content = {
-			compilerOptions: {
-				target: 'ES2023',
-				lib: ['ES2023'],
-				module: 'ESNext',
-				moduleResolution: 'bundler',
-				types: ['powpow-cli/types/server'],
-				allowImportingTsExtensions: true,
-				verbatimModuleSyntax: true,
-				moduleDetection: 'force',
-				useDefineForClassFields: true,
-				noEmit: true,
-				skipLibCheck: true,
-				strict: true,
-				noUnusedLocals: true,
-				noUnusedParameters: true,
-				erasableSyntaxOnly: true,
-				noFallthroughCasesInSwitch: true,
-				noUncheckedSideEffectImports: true,
-			},
+			extends: 'powpow-cli/tsconfig.server-logic.base.json',
 			include: [`${sourceDir}/server-logic/**/*`],
 		};
 		writeFileSync(serverTsconfig, JSON.stringify(content, null, '\t') + '\n');
 		log.success('Created tsconfig.server-logic.json');
 	}
 
-	// ── Step 9: Write powpow.config.json if missing ─────────────────────────
+	// ── Step 10: Write powpow.config.json if missing ────────────────────────
 	if (!existsSync(targetConfigPath)) {
 		const config = {
 			$schema: './node_modules/powpow-cli/powpow.config.schema.json',
@@ -201,10 +184,27 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 	log.info('Next step: run "powpow add" to wire up your first entry point.');
 }
 
-function readPkgJson(path: string): Record<string, unknown> & { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> } {
+function readPkgJson(path: string): Record<string, unknown> & { name?: string; scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> } {
 	try {
 		return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
 	} catch {
 		return {};
 	}
+}
+
+/**
+ * Sanitize a string into a valid npm package name per npm's package-name rules:
+ * lowercase, no spaces, only [a-z0-9-_.], no leading dot/underscore, ≤214 chars.
+ * Falls back to "powpow-project" if the input has no usable characters.
+ */
+function sanitizePackageName(raw: unknown): string {
+	const input = typeof raw === 'string' ? raw : '';
+	const cleaned = input
+		.toLowerCase()
+		.replace(/[^a-z0-9._-]+/g, '-')
+		.replace(/-+/g, '-')
+		.replace(/^[._-]+/, '')
+		.replace(/[._-]+$/, '')
+		.slice(0, 214);
+	return cleaned || 'powpow-project';
 }

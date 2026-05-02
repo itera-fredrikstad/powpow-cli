@@ -25,8 +25,12 @@ export function createGenerateBundleHook(ctx: PluginContext): Plugin['generateBu
 					output = `<script type="module" data-webtemplate-id="${resource.guid}">\n${output}\n</script>\n`;
 					break;
 				case 'web-file':
-				case 'server-logic':
 					// Plain ESM output, no wrapping.
+					break;
+				case 'server-logic':
+					// Power Pages server-logic runs as a plain script, not a module.
+					// Strip Rolldown's trailing module-marker `export {};`.
+					output = output.replace(/(?:^|\n)export\s*\{\s*\};?\s*$/, '');
 					break;
 			}
 

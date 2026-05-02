@@ -1,0 +1,32 @@
+{
+	"compilerOptions": {
+		"composite": true,
+		"declaration": true,
+		"target": "ES2023",
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"jsx": "react-jsx",
+		"types": ["powpow-cli/types/browser"],
+		"paths": {
+			"react": ["./node_modules/@types/react"],
+			"react/*": ["./node_modules/@types/react/*"],
+			"react-dom": ["./node_modules/@types/react-dom"],
+			"react-dom/*": ["./node_modules/@types/react-dom/*"],
+			"jquery": ["./node_modules/@types/jquery"],
+			"bootstrap": ["./node_modules/@types/bootstrap"]
+		},
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"moduleDetection": "force",
+		"useDefineForClassFields": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"erasableSyntaxOnly": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedSideEffectImports": true
+	}
+}

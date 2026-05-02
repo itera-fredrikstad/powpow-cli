@@ -1,6 +1,6 @@
 {
 	"name": "powpow-cli",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"description": "Pro-code development tool for Power Pages with TypeScript transpilation and local development server features.",
 	"type": "module",
 	"license": "ISC",
@@ -29,6 +29,8 @@
 		"dist",
 		"types",
 		"shims",
+		"tsconfig.web.base.json",
+		"tsconfig.server-logic.base.json",
 		"powpow.config.schema.json"
 	],
 	"scripts": {
@@ -39,13 +41,19 @@
 		"lint:fix": "biome check --write",
 		"format": "biome format --write",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"typecheck": "tsc --noEmit",
+		"verify": "pnpm lint && pnpm typecheck && pnpm test"
 	},
 	"publishConfig": {
 		"access": "public"
 	},
 	"dependencies": {
 		"@inquirer/prompts": "^7.0.0",
+		"@types/bootstrap": "~5.2.0",
+		"@types/jquery": "~3.5.30",
+		"@types/react": "~16.14.0",
+		"@types/react-dom": "~16.9.0",
 		"js-yaml": "^4.1.1",
 		"rolldown": "1.0.0-rc.12"
 	},

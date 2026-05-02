@@ -33,8 +33,14 @@ interface Shell {
 	refreshToken: () => void;
 }
 
-declare global {
-	interface Window {
-		shell: Shell;
-	}
+interface Window {
+	shell: Shell;
+}
+
+declare module 'shell' {
+	const shell: Shell;
+	export default shell;
+	export const ajaxSafePost: Shell['ajaxSafePost'];
+	export const getTokenDeferred: Shell['getTokenDeferred'];
+	export const refreshToken: Shell['refreshToken'];
 }

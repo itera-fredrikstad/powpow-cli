@@ -14,6 +14,7 @@ import { powpow } from './plugin/index.js';
 import { scanPortalResources } from './resources.js';
 import { DEFAULT_BROWSER_GLOBALS } from './shims.js';
 import type { PortalResource, PowpowConfig } from './types.js';
+import { toPosix } from './utils.js';
 
 interface BuildOptions {
 	dev?: boolean;
@@ -80,7 +81,7 @@ async function buildEntry(
 	outputCollector: Map<string, CollectedOutput>,
 	resolutionLog: EntryResolutionLog,
 	options: BuildOptions,
-): Promise<void> {
+): Promise<Set<string>> {
 	const { inputOptions, outputOptions } = createEntryBuildConfig(
 		config,
 		projectRoot,
@@ -93,11 +94,18 @@ async function buildEntry(
 		options,
 	);
 	const bundle = await rolldown(inputOptions);
-	await bundle.write(outputOptions);
+	// Use generate() instead of write() — generateBundle hook empties the chunk map and
+	// routes content through outputCollector, so writing to disk would just create an empty dist/.
+	await bundle.generate(outputOptions);
+	const watchFiles = await bundle.watchFiles;
 	await bundle.close();
+	return new Set(watchFiles.map(toPosix));
 }
 
-function finalizeOutputs(outputCollector: Map<string, CollectedOutput>): void {
+function finalizeOutputs(
+	outputCollector: Map<string, CollectedOutput>,
+	lastWritten: Map<string, string>,
+): void {
 	const urlToHash = new Map<string, string>();
 	for (const { resource, content } of outputCollector.values()) {
 		if (resource.type === 'web-file' && resource.runtimeUrl) {
@@ -118,10 +126,103 @@ function finalizeOutputs(outputCollector: Map<string, CollectedOutput>): void {
 						return hash ? `${url}?v=${hash}` : url;
 					});
 
+		if (lastWritten.get(resource.contentPath) === rewritten) continue;
+
 		mkdirSync(dirname(resource.contentPath), { recursive: true });
 		writeFileSync(resource.contentPath, rewritten);
+		lastWritten.set(resource.contentPath, rewritten);
 		log.success(`${resource.type} "${resource.name}" → ${resource.contentPath}`);
 	}
+}
+
+interface BuildState {
+	resolvedEntries: ResolvedEntry[];
+	resourceMap: Map<string, PortalResource>;
+	inlinedPackages: Map<string, Set<string>>;
+	outputCollector: Map<string, CollectedOutput>;
+	resolutionLogs: Map<string, EntryResolutionLog>;
+	/** Per-entry set of absolute file paths Rolldown loaded — populated by watchFiles after each successful build. */
+	entryFiles: Map<string, Set<string>>;
+	/** contentPath → last content we wrote there. Used to skip no-op disk writes between rebuilds. */
+	lastWritten: Map<string, string>;
+}
+
+function freshState(resolvedEntries: ResolvedEntry[], resourceMap: Map<string, PortalResource>): BuildState {
+	return {
+		resolvedEntries,
+		resourceMap,
+		inlinedPackages: new Map(),
+		outputCollector: new Map(),
+		resolutionLogs: new Map(),
+		entryFiles: new Map(),
+		lastWritten: new Map(),
+	};
+}
+
+/** Run a (possibly partial) build over the given state. If `entriesToBuild` is omitted, builds all entries. */
+async function runBuild(
+	config: PowpowConfig,
+	projectRoot: string,
+	state: BuildState,
+	options: BuildOptions,
+	entriesToBuild?: ResolvedEntry[],
+): Promise<void> {
+	const targets = entriesToBuild ?? state.resolvedEntries;
+
+	// Reset per-entry state for the entries we're about to rebuild.
+	for (const entry of targets) {
+		const guid = entry.resource.guid;
+		state.resolutionLogs.set(guid, {
+			bundledModules: new Set(),
+			externalized: [],
+			globalsUsed: new Set(),
+		});
+		state.outputCollector.delete(guid);
+		state.entryFiles.delete(guid);
+		// Drop stale dedup entries pointing at this guid.
+		for (const [pkg, owners] of state.inlinedPackages) {
+			owners.delete(guid);
+			if (owners.size === 0) state.inlinedPackages.delete(pkg);
+		}
+	}
+
+	const results = await Promise.allSettled(
+		targets.map((entry) => {
+			const resolutionLog = state.resolutionLogs.get(entry.resource.guid)!;
+			return buildEntry(
+				config,
+				projectRoot,
+				entry,
+				state.resolvedEntries,
+				state.inlinedPackages,
+				state.resourceMap,
+				state.outputCollector,
+				resolutionLog,
+				options,
+			);
+		}),
+	);
+
+	const failures: { target: string; source: string; reason: unknown }[] = [];
+	results.forEach((result, i) => {
+		const entry = targets[i];
+		if (result.status === 'fulfilled') {
+			state.entryFiles.set(entry.resource.guid, result.value);
+		} else {
+			failures.push({ target: entry.resource.guid, source: entry.source, reason: result.reason });
+		}
+	});
+
+	if (failures.length > 0) {
+		for (const { source, target, reason } of failures) {
+			log.error(`Failed to build entry "${source}" → ${target}`);
+			console.error(reason);
+		}
+		throw new Error(`${failures.length} of ${targets.length} entry points failed to build`);
+	}
+
+	finalizeOutputs(state.outputCollector, state.lastWritten);
+	printGraphSummary(buildGraph(state.resolvedEntries, state.resolutionLogs));
 }
 
 export async function build(
@@ -136,54 +237,41 @@ export async function build(
 
 	const sourceDir = resolve(projectRoot, config.sourceDir ?? 'src');
 	const resolvedEntries = resolveEntries(config, resourceMap, sourceDir);
-	const inlinedPackages = new Map<string, Set<string>>();
-	const outputCollector = new Map<string, CollectedOutput>();
-	const resolutionLogs = new Map<string, EntryResolutionLog>();
+	const state = freshState(resolvedEntries, resourceMap);
+	await runBuild(config, projectRoot, state, options);
+}
 
-	// Create a fresh resolution log for each entry
-	for (const entry of resolvedEntries) {
-		resolutionLogs.set(entry.resource.guid, {
-			bundledModules: new Set(),
-			externalized: [],
-			globalsUsed: new Set(),
-		});
-	}
-
-	const results = await Promise.allSettled(
-		resolvedEntries.map((entry) => {
-			const resolutionLog = resolutionLogs.get(entry.resource.guid)!;
-			return buildEntry(
-				config,
-				projectRoot,
-				entry,
-				resolvedEntries,
-				inlinedPackages,
-				resourceMap,
-				outputCollector,
-				resolutionLog,
-				options,
-			);
-		}),
-	);
-
-	const failures: { target: string; source: string; reason: unknown }[] = [];
-	results.forEach((result, i) => {
-		if (result.status === 'rejected') {
-			const entry = resolvedEntries[i];
-			failures.push({ target: entry.resource.guid, source: entry.source, reason: result.reason });
+/**
+ * Compute the set of entries affected by a set of changed source paths.
+ * - An entry is affected if its source file is among the changes, or if Rolldown loaded
+ *   the changed file when bundling it (per `entryFiles`).
+ * - Entries with no recorded `entryFiles` (e.g. previous build failed) are always rebuilt
+ *   on any change so they get another chance.
+ */
+function affectedEntries(
+	changedPaths: Set<string>,
+	entries: ResolvedEntry[],
+	entryFiles: Map<string, Set<string>>,
+): { entry: ResolvedEntry; reason: string }[] {
+	const out: { entry: ResolvedEntry; reason: string }[] = [];
+	for (const entry of entries) {
+		const files = entryFiles.get(entry.resource.guid);
+		if (!files) {
+			out.push({ entry, reason: 'no prior build' });
+			continue;
 		}
-	});
-
-	if (failures.length > 0) {
-		for (const { source, target, reason } of failures) {
-			log.error(`Failed to build entry "${source}" → ${target}`);
-			console.error(reason);
+		if (entry.absSource && changedPaths.has(entry.absSource)) {
+			out.push({ entry, reason: 'entry source' });
+			continue;
 		}
-		throw new Error(`${failures.length} of ${resolvedEntries.length} entry points failed to build`);
+		for (const path of changedPaths) {
+			if (files.has(path)) {
+				out.push({ entry, reason: `loads ${path}` });
+				break;
+			}
+		}
 	}
-
-	finalizeOutputs(outputCollector);
-	printGraphSummary(buildGraph(resolvedEntries, resolutionLogs));
+	return out;
 }
 
 export async function watchBuild(
@@ -192,42 +280,81 @@ export async function watchBuild(
 	preScannedResources?: Map<string, PortalResource>,
 	signal?: AbortSignal,
 ): Promise<void> {
+	const portalDir = resolvePortalDir(config, projectRoot);
+	const resourceMap = preScannedResources ?? scanPortalResources(portalDir, config.roots);
+	validateEntryPoints(config, projectRoot, resourceMap);
+
 	const sourceDir = resolve(projectRoot, config.sourceDir ?? 'src');
+	const resolvedEntries = resolveEntries(config, resourceMap, sourceDir);
+	const state = freshState(resolvedEntries, resourceMap);
 
 	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 	let building = false;
-	let pending = false;
+	const pendingChanges = new Set<string>();
+	// `null` = pending request to rebuild everything (initial build, or change with no filename info).
+	let pendingFullRebuild = true;
 
 	async function rebuild() {
-		if (building) {
-			pending = true;
-			return;
-		}
+		if (building) return;
 		building = true;
 		try {
-			do {
-				pending = false;
-				log.info('Building…', 'watch');
+			while (pendingFullRebuild || pendingChanges.size > 0) {
+				const fullRebuild = pendingFullRebuild;
+				const changes = new Set(pendingChanges);
+				pendingFullRebuild = false;
+				pendingChanges.clear();
+
+				let targets: ResolvedEntry[] | undefined;
+				if (!fullRebuild) {
+					const affected = affectedEntries(changes, resolvedEntries, state.entryFiles);
+					if (affected.length === 0) {
+						log.info(
+							`No entries depend on the changed file${changes.size === 1 ? '' : 's'} — skipping rebuild.`,
+							'watch',
+						);
+						continue;
+					}
+					for (const { entry, reason } of affected) {
+						log.info(`  → "${entry.source}" rebuilds (${reason})`, 'watch');
+					}
+					targets = affected.map((a) => a.entry);
+				}
+
+				const label = targets
+					? `Rebuilding ${targets.length}/${resolvedEntries.length} entr${targets.length === 1 ? 'y' : 'ies'}…`
+					: 'Building…';
+				log.info(label, 'watch');
 				const start = performance.now();
 				try {
-					await build(config, projectRoot, preScannedResources, { dev: true });
+					await runBuild(config, projectRoot, state, { dev: true }, targets);
 					log.info(`Built in ${Math.round(performance.now() - start)}ms`, 'watch');
 				} catch (error) {
 					log.error('Build error:', 'watch');
 					console.error(error);
 				}
-			} while (pending);
+			}
 		} finally {
 			building = false;
 		}
 	}
 
-	// Initial build
+	function scheduleRebuild() {
+		if (debounceTimer) clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(() => {
+			void rebuild();
+		}, 100);
+	}
+
+	// Initial full build
 	await rebuild();
 
-	const watcher = fsWatch(sourceDir, { recursive: true }, (_event, _filename) => {
-		if (debounceTimer) clearTimeout(debounceTimer);
-		debounceTimer = setTimeout(rebuild, 100);
+	const watcher = fsWatch(sourceDir, { recursive: true }, (_event, filename) => {
+		if (filename) {
+			pendingChanges.add(toPosix(resolve(sourceDir, filename.toString())));
+		} else {
+			pendingFullRebuild = true;
+		}
+		scheduleRebuild();
 	});
 
 	return new Promise<void>((resolvePromise) => {

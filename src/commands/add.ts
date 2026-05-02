@@ -152,44 +152,18 @@ async function promptCreateFile(
 			default: false,
 		});
 		if (overwrite) {
-			writeFileSync(absPath, scaffoldContent(selected.name, resourceType));
+			writeFileSync(absPath, '');
 			log.successRaw(`Overwrote ${absPath}`);
 		} else {
 			log.successRaw(`Keeping existing file at ${absPath}`);
 		}
 	} else {
 		mkdirSync(dirname(absPath), { recursive: true });
-		writeFileSync(absPath, scaffoldContent(selected.name, resourceType));
+		writeFileSync(absPath, '');
 		log.successRaw(`Created ${absPath}`);
 	}
 
 	return `${rootSubdir}/${cleanName}`;
-}
-
-function scaffoldContent(name: string, type: ResourceType): string {
-	switch (type) {
-		case 'web-template':
-			return [
-				`import { createRoot } from 'react-dom';`,
-				`import { createElement } from 'react';`,
-				``,
-				`function App() {`,
-				`\treturn createElement('div', null, '${name}');`,
-				`}`,
-				``,
-				`const container = document.getElementById('app');`,
-				`if (container) {`,
-				`\tcreateRoot(container).render(createElement(App));`,
-				`}`,
-				``,
-			].join('\n');
-
-		case 'web-file':
-			return `export {};\n`;
-
-		case 'server-logic':
-			return `Server.Logger.Log('${name} invoked');\n`;
-	}
 }
 
 function sanitizeFilename(name: string): string {

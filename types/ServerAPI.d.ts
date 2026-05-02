@@ -133,6 +133,4 @@ interface Server {
 	};
 }
 
-declare global {
-	const Server: Server;
-}
+declare const Server: Server;

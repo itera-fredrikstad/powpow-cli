@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.4.0
+
+A round of dev-loop and consumer-project ergonomics fixes, plus the AI-tooling
+scaffolding under `.claude/`. No breaking changes for end users; consuming
+projects re-running `powpow init` will get the new project-references tsconfig
+layout.
+
+### Changed
+
+- `powpow init` now writes a project-references `tsconfig.json` (a solution
+  root with `references` to `tsconfig.web.json` and
+  `tsconfig.server-logic.json`), each extending the shipped
+  `powpow-cli/tsconfig.web.base.json` / `tsconfig.server-logic.base.json`.
+  Previous versions inlined the compiler options in the consumer's tsconfig.
+- `powpow init` sanitizes the package name produced by `<pm> init` (lowercase,
+  npm-safe characters, ≤214 chars) so directories with uppercase letters or
+  spaces don't yield invalid `package.json` names.
+- `powpow add` now creates **empty** source files rather than scaffolding a
+  default React/server-logic template. Lets you start from a blank slate.
+- Web-template and web-file builds now route chunk content through the
+  in-memory `outputCollector` and call `bundle.generate()` instead of
+  `bundle.write()`, so Rolldown no longer leaves an empty `dist/` in the
+  user's project directory.
+- Incremental rebuilds now skip disk writes whose content is unchanged
+  (`lastWritten` map per portal `contentPath`).
+- `Microsoft` Power Pages global is exposed both as a `Window` member and as a
+  `'Microsoft'` ambient module so consumers can `import` it as well as
+  reference `window.Microsoft`.
+
+### Fixed
+
+- Watch mode no longer re-bundles entries whose loaded files
+  (`bundle.watchFiles`) didn't change, eliminating spurious rebuild log noise.
+
+### Tooling (repo-internal)
+
+- `.claude/` scaffolding for AI-assisted development: shared `settings.json`
+  with strict PostToolUse lint/typecheck hook, a Stop hook that prompts for
+  post-change actions when uncommitted code changes haven't been processed,
+  slash commands `/verify`, `/test-changed`, `/scratch-build`, `/post-change`,
+  and split docs under `.claude/docs/` (build-pipeline, module-resolution,
+  build-state-machine, troubleshooting, verification-checklist).
+- New npm scripts: `pnpm typecheck` (`tsc --noEmit`) and `pnpm verify`
+  (lint + typecheck + tests).
+- New `.github/PULL_REQUEST_TEMPLATE.md`.
+
 ## 0.3.0
 
 A major refactor adding **server-logic** as a first-class entry-point type,
