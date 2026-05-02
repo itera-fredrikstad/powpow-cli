@@ -6,6 +6,7 @@ Deferred items from the 2026-04-17 full code review. Items are grouped by theme.
 
 - **Hot reload via SSE / WebSocket** (§4.2, §6.1). The watch loop already rebuilds on change; what's missing is a signal to the browser so the PowPow Interceptor extension can live-swap portal assets without a manual refresh. Cheapest path: a `/events` SSE endpoint that emits `rebuild` after each successful build.
 - **Port validation with clear error** (§1.10). `parseInt(process.env.PORT ?? '3001', 10)` silently yields `NaN` on typos and lets the server listen on a random port.
+- **Resource-type filter in `powpow add`**. Before listing portal targets, prompt for *web-templates*, *web-files*, or *server-logic* so the picker isn't a flat list of every resource in the portal. Big portals make the current picker hard to navigate.
 
 ## Correctness / Robustness
 
@@ -25,6 +26,7 @@ Deferred items from the 2026-04-17 full code review. Items are grouped by theme.
 ## Product
 
 - **First-class static-asset support** (§6.2). Currently only JS/TS entry points are handled. Real portal projects include CSS, images, fonts. Design: `web-file` entries pointing at plain files get copy-through with correct content-type; CSS imports from TS bundle into a sibling web-file.
+- **CSS / SCSS support**. Treat `.css` / `.scss` files as first-class entry points (or as imports from TS that bundle into a sibling web-file). SCSS needs a preprocessor pass before Rolldown sees it; CSS can flow through Rolldown directly. Overlaps with §6.2 — likely lands together.
 - **`powpow publish` — deploy pipeline** (§6.6). A wrapper around the Power Platform CLI (`pac`) that pushes built output back to the portal, closing the edit-deploy loop.
 
 ---
