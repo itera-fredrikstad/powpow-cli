@@ -44,15 +44,15 @@ This single command:
 - Scaffolds the strict source layout: `src/web-templates/`, `src/web-files/`, `src/server-logic/`.
 - Writes three tsconfigs:
   - root `tsconfig.json` with TypeScript project `references` to the two below
-  - `tsconfig.web.json` extending `powpow-cli/tsconfig.web.base.json` (browser-typed, JSX, DOM lib)
-  - `tsconfig.server-logic.json` extending `powpow-cli/tsconfig.server-logic.base.json` (server-typed, no DOM, no JSX)
+  - `tsconfig.web.json` extending `powpow-cli/presets/tsconfig.web.base.json` (browser-typed, JSX, DOM lib)
+  - `tsconfig.server-logic.json` extending `powpow-cli/presets/tsconfig.server-logic.base.json` (server-typed, no DOM, no JSX)
 - Writes a starter `powpow.config.json`.
 
 `init` is idempotent — re-running on an existing project skips files that already exist.
 
 ```json
 {
-  "$schema": "./node_modules/powpow-cli/powpow.config.schema.json",
+  "$schema": "./node_modules/powpow-cli/presets/powpow.config.schema.json",
   "portalConfigPath": "my-portal",
   "entryPoints": []
 }
@@ -233,8 +233,8 @@ The server is designed to work with the [PowPow Interceptor](https://github.com/
 `powpow init` writes three tsconfigs that wire the browser and server-logic worlds together via TypeScript project references:
 
 - **`tsconfig.json`** — solution root. Empty `files`, with `references` to both child configs. Running `tsc -b` from the project root type-checks everything.
-- **`tsconfig.web.json`** — browser entries (`src/web-templates/`, `src/web-files/`). Extends `powpow-cli/tsconfig.web.base.json` (ES2023 target, DOM lib, React JSX transform, and the Power Pages browser globals from `powpow-cli/types/browser`).
-- **`tsconfig.server-logic.json`** — server-logic entries (`src/server-logic/`). Extends `powpow-cli/tsconfig.server-logic.base.json` (ES2023, no DOM, no JSX, and the `Server` global from `powpow-cli/types/server`).
+- **`tsconfig.web.json`** — browser entries (`src/web-templates/`, `src/web-files/`). Extends `powpow-cli/presets/tsconfig.web.base.json` (ES2023 target, DOM lib, React JSX transform, and the Power Pages browser globals from `powpow-cli/types/browser`).
+- **`tsconfig.server-logic.json`** — server-logic entries (`src/server-logic/`). Extends `powpow-cli/presets/tsconfig.server-logic.base.json` (ES2023, no DOM, no JSX, and the `Server` global from `powpow-cli/types/server`).
 
 Both base configs are shipped inside the `powpow-cli` package, so upgrading the CLI updates the compiler options. Each child config `include`s its own root only, so a single editor instance type-checks each directory with the right ambient types in scope.
 

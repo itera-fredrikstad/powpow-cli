@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { input, select } from '@inquirer/prompts';
 import { log } from '../log.js';
-import { addDevCmd, detectPackageManager, initCmd, runPm } from '../pm.js';
 import type { PackageManager } from '../pm.js';
+import { addDevCmd, detectPackageManager, initCmd, runPm } from '../pm.js';
 
 interface InitOptions {
 	configPath?: string;
@@ -119,11 +119,7 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 	}
 
 	// ── Step 6: Scaffold source directories ───────────────────────────────────
-	const dirs = [
-		`${sourceDir}/web-templates`,
-		`${sourceDir}/web-files`,
-		`${sourceDir}/server-logic`,
-	];
+	const dirs = [`${sourceDir}/web-templates`, `${sourceDir}/web-files`, `${sourceDir}/server-logic`];
 	for (const dir of dirs) {
 		const absDir = resolve(projectRoot, dir);
 		if (!existsSync(absDir)) {
@@ -148,7 +144,7 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 	const webTsconfig = resolve(projectRoot, 'tsconfig.web.json');
 	if (!existsSync(webTsconfig)) {
 		const content = {
-			extends: 'powpow-cli/tsconfig.web.base.json',
+			extends: 'powpow-cli/presets/tsconfig.web.base.json',
 			include: [`${sourceDir}/web-templates/**/*`, `${sourceDir}/web-files/**/*`],
 		};
 		writeFileSync(webTsconfig, JSON.stringify(content, null, '\t') + '\n');
@@ -159,7 +155,7 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 	const serverTsconfig = resolve(projectRoot, 'tsconfig.server-logic.json');
 	if (!existsSync(serverTsconfig)) {
 		const content = {
-			extends: 'powpow-cli/tsconfig.server-logic.base.json',
+			extends: 'powpow-cli/presets/tsconfig.server-logic.base.json',
 			include: [`${sourceDir}/server-logic/**/*`],
 		};
 		writeFileSync(serverTsconfig, JSON.stringify(content, null, '\t') + '\n');
@@ -169,7 +165,7 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 	// ── Step 10: Write powpow.config.json if missing ────────────────────────
 	if (!existsSync(targetConfigPath)) {
 		const config = {
-			$schema: './node_modules/powpow-cli/powpow.config.schema.json',
+			$schema: './node_modules/powpow-cli/presets/powpow.config.schema.json',
 			portalConfigPath: portalConfigPath.trim(),
 			sourceDir,
 			entryPoints: [],
@@ -184,7 +180,12 @@ export async function init({ configPath }: InitOptions): Promise<void> {
 	log.info('Next step: run "powpow add" to wire up your first entry point.');
 }
 
-function readPkgJson(path: string): Record<string, unknown> & { name?: string; scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> } {
+function readPkgJson(path: string): Record<string, unknown> & {
+	name?: string;
+	scripts?: Record<string, string>;
+	dependencies?: Record<string, string>;
+	devDependencies?: Record<string, string>;
+} {
 	try {
 		return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
 	} catch {

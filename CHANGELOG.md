@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.5.0
+
+Tidy of the package root: the three files that exist solely to be referenced
+from consuming projects now live under `presets/`. **Breaking change** for
+existing consumer projects — their `tsconfig.web.json`, `tsconfig.server-logic.json`,
+and `powpow.config.json` need their `extends` / `$schema` paths updated by hand,
+since `powpow init` skips files that already exist.
+
+### Changed
+
+- Moved `tsconfig.web.base.json`, `tsconfig.server-logic.base.json`, and
+  `powpow.config.schema.json` from the package root into `presets/`. New
+  consumer-facing paths:
+  - `powpow-cli/presets/tsconfig.web.base.json`
+  - `powpow-cli/presets/tsconfig.server-logic.base.json`
+  - `powpow-cli/presets/powpow.config.schema.json`
+- `powpow init` now scaffolds these new paths in the generated
+  `tsconfig.web.json`, `tsconfig.server-logic.json`, and `powpow.config.json`.
+- `package.json` `files` ships `presets/` instead of three loose root files.
+
+### Migration
+
+In each consuming project, update the references:
+
+```jsonc
+// tsconfig.web.json
+"extends": "powpow-cli/presets/tsconfig.web.base.json"
+// tsconfig.server-logic.json
+"extends": "powpow-cli/presets/tsconfig.server-logic.base.json"
+// powpow.config.json
+"$schema": "./node_modules/powpow-cli/presets/powpow.config.schema.json"
+```
+
+`types/` and `shims/` are unchanged — `powpow-cli/types/browser` and
+`powpow-cli/types/server` continue to resolve as before.
+
 ## 0.4.0
 
 A round of dev-loop and consumer-project ergonomics fixes, plus the AI-tooling
