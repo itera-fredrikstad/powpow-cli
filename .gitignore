@@ -13,6 +13,9 @@ dist-ssr
 *.local
 *.tsbuildinfo
 
+# Claude Code per-project cache (sentinel files for hooks, etc.)
+.claude/.cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

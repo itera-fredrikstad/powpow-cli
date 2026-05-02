@@ -1,0 +1,46 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm add *)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm lint:fix)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm verify)",
+      "Bash(pnpm biome *)",
+      "Bash(pnpm format *)",
+      "Bash(pnpm exec *)",
+      "Bash(pnpm --silent *)",
+      "Bash(tsc *)",
+      "Bash(node *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"exit $?\")",
+      "Read(/private/tmp/powpow-scratch/**)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post-change-prompt.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
