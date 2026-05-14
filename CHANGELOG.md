@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.0 - 2026-05-14
+
+Entry-point source files can now live anywhere under `sourceDir`. Resource
+type (web-template / web-file / server-logic) is determined solely by the
+target GUID's Power Pages YAML metadata, not by which top-level folder the
+source file sits in.
+
+### Changed
+
+- Removed the per-folder source-layout requirement. `validateEntryPoints`
+  no longer rejects entries whose source is outside `web-templates/`,
+  `web-files/`, or `server-logic/` — organise the source tree however
+  you like.
+- `powpow add` now prompts for a path relative to `sourceDir` (subfolders
+  allowed) instead of forcing a type-specific subdirectory.
+- The filename suggested by `powpow add` preserves the case of the
+  resource's `adx_name` (e.g. `MyWidget.tsx` instead of `mywidget.tsx`).
+- `roots` in `powpow.config.json` now configures only the portal-side
+  folder names used to scan for `*.webtemplate.yml` / `*.webfile.yml` /
+  `*.serverlogic.yml`. It no longer constrains source-side layout.
+
 ## 0.5.0
 
 Tidy of the package root: the three files that exist solely to be referenced

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
-import type { PortalResource, PowpowConfig, ResourceType } from './types.js';
-import { isBareSpecifier, toPosix } from './utils.js';
+import { dirname, resolve } from 'node:path';
+import type { PortalResource, PowpowConfig } from './types.js';
+import { isBareSpecifier } from './utils.js';
 
 export const DEFAULT_ROOTS = {
 	webTemplates: 'web-templates',
@@ -141,16 +141,9 @@ export function loadAndValidate(configPath?: string): LoadedConfig {
 	};
 }
 
-export function validateEntryPoints(config: PowpowConfig, projectRoot: string, resourceMap: Map<string, PortalResource>): void {
-	const sourceDir = resolveSourceDir(config, projectRoot);
-	const roots = resolveRoots(config);
-	const rootToType: Array<{ root: string; type: ResourceType }> = [
-		{ root: roots.webTemplates, type: 'web-template' },
-		{ root: roots.webFiles, type: 'web-file' },
-		{ root: roots.serverLogic, type: 'server-logic' },
-	];
+export function validateEntryPoints(config: PowpowConfig, _projectRoot: string, resourceMap: Map<string, PortalResource>): void {
 	const missingTargets: { source: string; target: string }[] = [];
-	const layoutErrors: string[] = [];
+	const typeErrors: string[] = [];
 
 	for (const entry of config.entryPoints) {
 		const resource = resourceMap.get(entry.target);
@@ -159,35 +152,9 @@ export function validateEntryPoints(config: PowpowConfig, projectRoot: string, r
 			continue;
 		}
 
-		if (isBareSpecifier(entry.source)) {
-			if (resource.type !== 'web-file') {
-				layoutErrors.push(
-					`Entry "${entry.source}" → ${entry.target}: bare specifier sources are only allowed for web-file targets, but target type is ${resource.type}.`,
-				);
-			}
-			continue;
-		}
-
-		const absSource = toPosix(resolve(sourceDir, entry.source));
-		const relSource = toPosix(relative(sourceDir, absSource));
-		const segments = relSource.split('/');
-		if (segments.length !== 2 || segments[0] === '..' || relSource.startsWith('..')) {
-			layoutErrors.push(
-				`Entry "${entry.source}" → ${entry.target}: source must be a direct child of one of the configured roots (${rootToType.map((r) => `"${r.root}"`).join(', ')}).`,
-			);
-			continue;
-		}
-		const [topDir] = segments;
-		const matchedRoot = rootToType.find((r) => r.root === topDir);
-		if (!matchedRoot) {
-			layoutErrors.push(
-				`Entry "${entry.source}" → ${entry.target}: top-level directory "${topDir}" is not one of the configured roots (${rootToType.map((r) => `"${r.root}"`).join(', ')}).`,
-			);
-			continue;
-		}
-		if (matchedRoot.type !== resource.type) {
-			layoutErrors.push(
-				`Entry "${entry.source}" → ${entry.target}: file lives under "${matchedRoot.root}/" (${matchedRoot.type}) but target GUID resolves to a ${resource.type} resource.`,
+		if (isBareSpecifier(entry.source) && resource.type !== 'web-file') {
+			typeErrors.push(
+				`Entry "${entry.source}" → ${entry.target}: bare specifier sources are only allowed for web-file targets, but target type is ${resource.type}.`,
 			);
 		}
 	}
@@ -200,7 +167,7 @@ export function validateEntryPoints(config: PowpowConfig, projectRoot: string, r
 		);
 	}
 
-	if (layoutErrors.length > 0) {
-		throw new Error(`Invalid entry-point layout:\n${layoutErrors.map((m) => `  - ${m}`).join('\n')}`);
+	if (typeErrors.length > 0) {
+		throw new Error(`Invalid entry-point configuration:\n${typeErrors.map((m) => `  - ${m}`).join('\n')}`);
 	}
 }

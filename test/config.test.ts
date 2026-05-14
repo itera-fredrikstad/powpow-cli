@@ -100,9 +100,9 @@ describe('validateEntryPoints', () => {
 		return new Map(entries.map(([g, t]) => [g, mkResource(g, t)]));
 	}
 
-	it('passes when every entry target exists in the resource map and layout matches', () => {
+	it('passes when every entry target exists in the resource map', () => {
 		mkdirSync(join(tmp, 'src'), { recursive: true });
-		const config = { portalConfigPath: 'p', entryPoints: [{ source: 'web-files/a.ts', target: 'g1' }] };
+		const config = { portalConfigPath: 'p', entryPoints: [{ source: 'a.ts', target: 'g1' }] };
 		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).not.toThrow();
 	});
 
@@ -111,47 +111,21 @@ describe('validateEntryPoints', () => {
 		const config = {
 			portalConfigPath: 'p',
 			entryPoints: [
-				{ source: 'web-files/a.ts', target: 'g1' },
-				{ source: 'web-files/b.ts', target: 'missing' },
+				{ source: 'a.ts', target: 'g1' },
+				{ source: 'b.ts', target: 'missing' },
 			],
 		};
 		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).toThrowError(/do not match.*missing/s);
 	});
 
-	it('throws when source is not a direct child of a configured root', () => {
-		mkdirSync(join(tmp, 'src'), { recursive: true });
-		const config = {
-			portalConfigPath: 'p',
-			entryPoints: [{ source: 'a.ts', target: 'g1' }],
-		};
-		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).toThrowError(/direct child/);
-	});
-
-	it('throws when nested deeper than direct child', () => {
-		mkdirSync(join(tmp, 'src'), { recursive: true });
-		const config = {
-			portalConfigPath: 'p',
-			entryPoints: [{ source: 'web-files/sub/a.ts', target: 'g1' }],
-		};
-		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).toThrowError(/direct child/);
-	});
-
-	it('throws when root does not match resource type', () => {
-		mkdirSync(join(tmp, 'src'), { recursive: true });
-		const config = {
-			portalConfigPath: 'p',
-			entryPoints: [{ source: 'web-files/a.ts', target: 'g1' }],
-		};
-		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-template']]))).toThrowError(/web-files.*web-template/);
-	});
-
-	it('allows multiple entries inside the same root directory', () => {
+	it('accepts entries regardless of source-file location', () => {
 		mkdirSync(join(tmp, 'src'), { recursive: true });
 		const config = {
 			portalConfigPath: 'p',
 			entryPoints: [
-				{ source: 'web-files/a.ts', target: 'g1' },
-				{ source: 'web-files/b.ts', target: 'g2' },
+				{ source: 'flat.tsx', target: 'g1' },
+				{ source: 'features/nested/deep.ts', target: 'g2' },
+				{ source: 'shared/run.ts', target: 'g3' },
 			],
 		};
 		expect(() =>
@@ -159,8 +133,9 @@ describe('validateEntryPoints', () => {
 				config,
 				tmp,
 				mkPortal([
-					['g1', 'web-file'],
+					['g1', 'web-template'],
 					['g2', 'web-file'],
+					['g3', 'server-logic'],
 				]),
 			),
 		).not.toThrow();
@@ -192,15 +167,5 @@ describe('validateEntryPoints', () => {
 			entryPoints: [{ source: 'lodash', target: 'g1' }],
 		};
 		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-template']]))).toThrowError(/bare specifier/);
-	});
-
-	it('honours custom roots config', () => {
-		mkdirSync(join(tmp, 'src'), { recursive: true });
-		const config = {
-			portalConfigPath: 'p',
-			roots: { webFiles: 'wf' },
-			entryPoints: [{ source: 'wf/a.ts', target: 'g1' }],
-		};
-		expect(() => validateEntryPoints(config, tmp, mkPortal([['g1', 'web-file']]))).not.toThrow();
 	});
 });

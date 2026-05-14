@@ -30,7 +30,12 @@ export interface PowpowConfig {
 	 * When unset, all origins are allowed (current default for ease of setup).
 	 */
 	extensionId?: string;
-	/** Source-directory layout roots. Each entry-point source must be a direct child of one of these. */
+	/**
+	 * Portal-directory folder names used by `scanPortalResources` to locate
+	 * `*.webtemplate.yml`, `*.webfile.yml`, and `*.serverlogic.yml` metadata.
+	 * Source-side layout is unconstrained — entry-point source files can live
+	 * anywhere under `sourceDir`.
+	 */
 	roots?: {
 		webTemplates?: string;
 		webFiles?: string;

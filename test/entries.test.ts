@@ -89,13 +89,13 @@ describe('findEntryForFile', () => {
 });
 
 describe('validateEntryPoints (integration with type inference)', () => {
-	it('detects mismatch: file in web-files/ targeting a web-template GUID', () => {
+	it('accepts entries regardless of source location now that folder layout is unconstrained', () => {
 		const config: PowpowConfig = {
 			portalConfigPath: 'p',
-			entryPoints: [{ source: 'web-files/a.ts', target: 'gT' }],
+			entryPoints: [{ source: 'anywhere/a.tsx', target: 'gT' }],
 		};
 		const resourceMap = new Map<string, PortalResource>([['gT', mkResource('gT', 'web-template')]]);
-		expect(() => validateEntryPoints(config, tmp, resourceMap)).toThrowError(/web-files.*web-template/);
+		expect(() => validateEntryPoints(config, tmp, resourceMap)).not.toThrow();
 	});
 
 	it('accepts bare specifier only for web-file targets', () => {

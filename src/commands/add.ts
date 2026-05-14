@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { basename, dirname, relative, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { confirm, input, select } from '@inquirer/prompts';
-import { loadAndValidate, resolveRoots, saveConfig } from '../config.js';
+import { loadAndValidate, saveConfig } from '../config.js';
 import { log } from '../log.js';
 import { scanPortalResources } from '../resources.js';
 import type { PortalResource, ResourceType } from '../types.js';
+import { toPosix } from '../utils.js';
 
 interface AddOptions {
 	configPath?: string;
@@ -63,14 +64,7 @@ export async function add({ configPath }: AddOptions): Promise<void> {
 	});
 
 	const resourceType: ResourceType = selected.type;
-	const roots = resolveRoots(config);
 
-	// Determine the root subdirectory for this resource type
-	const rootSubdir = resourceType === 'web-template' ? roots.webTemplates : resourceType === 'web-file' ? roots.webFiles : roots.serverLogic;
-
-	const absRootDir = resolve(absSourceDir, rootSubdir);
-
-	// For web-file: allow bare specifier or file
 	let sourceRelative: string;
 
 	if (resourceType === 'web-file') {
@@ -91,10 +85,10 @@ export async function add({ configPath }: AddOptions): Promise<void> {
 				},
 			});
 		} else {
-			sourceRelative = await promptCreateFile(selected, resourceType, rootSubdir, absRootDir, absSourceDir);
+			sourceRelative = await promptCreateFile(selected, resourceType, absSourceDir);
 		}
 	} else {
-		sourceRelative = await promptCreateFile(selected, resourceType, rootSubdir, absRootDir, absSourceDir);
+		sourceRelative = await promptCreateFile(selected, resourceType, absSourceDir);
 	}
 
 	// Add entry point to config
@@ -107,39 +101,30 @@ export async function add({ configPath }: AddOptions): Promise<void> {
 	log.successRaw(`✓ Added entry: "${sourceRelative}" → ${selected.type} "${selected.name}" (${selected.guid})`);
 }
 
-async function promptCreateFile(
-	selected: PortalResource,
-	resourceType: ResourceType,
-	rootSubdir: string,
-	absRootDir: string,
-	absSourceDir: string,
-): Promise<string> {
+async function promptCreateFile(selected: PortalResource, resourceType: ResourceType, absSourceDir: string): Promise<string> {
 	const ext = resourceType === 'web-template' ? '.tsx' : '.ts';
 	const defaultName = sanitizeFilename(selected.name) + ext;
 
 	const filename = await input({
-		message: `Filename (inside ${rootSubdir}/):`,
+		message: 'Path (relative to sourceDir):',
 		default: defaultName,
 		validate(value) {
-			if (!value.trim()) return 'Filename is required';
-			// Must be a direct child — no path separators (other than a leading ./ which we strip)
 			const stripped = value.trim().replace(/^\.\//, '');
-			if (stripped.includes('/') || stripped.includes('\\')) {
-				return `File must be a direct child of ${rootSubdir}/ (no subdirectories)`;
+			if (!stripped) return 'Path is required';
+			if (stripped.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(stripped)) {
+				return 'Path must be relative to sourceDir (no absolute paths)';
+			}
+			const absCandidate = resolve(absSourceDir, stripped);
+			const rel = relative(absSourceDir, absCandidate);
+			if (rel.startsWith('..') || rel === '') {
+				return 'Path must resolve to a file inside sourceDir';
 			}
 			return true;
 		},
 	});
 
-	const cleanName = filename.trim().replace(/^\.\//, '');
-	const absPath = resolve(absRootDir, cleanName);
-
-	// Validate the resolved path is directly under the root (defensive)
-	const rel = relative(absRootDir, absPath);
-	if (rel.includes('..') || rel.includes('/')) {
-		log.errorRaw(`File path must be a direct child of ${rootSubdir}/`);
-		process.exit(1);
-	}
+	const cleanPath = filename.trim().replace(/^\.\//, '');
+	const absPath = resolve(absSourceDir, cleanPath);
 
 	if (existsSync(absPath)) {
 		const overwrite = await confirm({
@@ -158,12 +143,9 @@ async function promptCreateFile(
 		log.successRaw(`Created ${absPath}`);
 	}
 
-	return `${rootSubdir}/${cleanName}`;
+	return toPosix(cleanPath);
 }
 
-function sanitizeFilename(name: string): string {
-	return name
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '');
+export function sanitizeFilename(name: string): string {
+	return name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
 }

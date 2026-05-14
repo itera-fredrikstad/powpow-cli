@@ -41,7 +41,7 @@ This single command:
 - Creates `package.json` if missing, sanitizing the package name derived from the directory.
 - Installs `powpow-cli` and `typescript` as devDependencies.
 - Adds `powpow:dev` and `powpow:build` scripts to `package.json`.
-- Scaffolds the strict source layout: `src/web-templates/`, `src/web-files/`, `src/server-logic/`.
+- Scaffolds a starter source directory at `src/` (organise it however you like — entry-point sources can live anywhere under it).
 - Writes three tsconfigs:
   - root `tsconfig.json` with TypeScript project `references` to the two below
   - `tsconfig.web.json` extending `powpow-cli/presets/tsconfig.web.base.json` (browser-typed, JSX, DOM lib)
@@ -66,7 +66,7 @@ Map a source file to a Power Pages resource (web template, web file, or server l
 npx powpow add
 ```
 
-The interactive prompt lists available portal resources, lets you pick one, and either creates a new source file or links an existing one. The new file is placed in the root that matches the resource type — `src/web-templates/`, `src/web-files/`, or `src/server-logic/` — and is created empty so you can start from a blank slate. The entry is appended to `powpow.config.json`.
+The interactive prompt lists available portal resources, lets you pick one, and either creates a new source file or links an existing one. The new file is placed at the path you choose under `sourceDir` (defaulting to a filename derived from the resource's `adx_name`, with original casing preserved) and is created empty so you can start from a blank slate. The resource type — web-template, web-file, or server-logic — is taken from the target GUID's Power Pages metadata, so source files can be organised however you prefer. The entry is appended to `powpow.config.json`.
 
 ### 3. Develop
 
